@@ -25,8 +25,14 @@ def get_logger(name, log_dir, config_dir):
 	"""
 	Creates a logger object
 	"""
+<<<<<<< HEAD
+	os.makedirs(log_dir, exist_ok=True)
+	config_dict = json.load(open( config_dir + 'log_config.json'))
+	config_dict['handlers']['file_handler']['filename'] = os.path.join(log_dir, name.replace('/', '-'))
+=======
 	config_dict = json.load(open( config_dir + 'log_config.json'))
 	config_dict['handlers']['file_handler']['filename'] = log_dir + name.replace('/', '-')
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 	logging.config.dictConfig(config_dict)
 	logger = logging.getLogger(name)
 

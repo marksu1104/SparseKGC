@@ -1,6 +1,13 @@
 import argparse
+<<<<<<< HEAD
+import csv
 import numpy as np
 import os
+import time
+=======
+import numpy as np
+import os
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 from tqdm import tqdm
 from collections import defaultdict
 import pickle
@@ -14,7 +21,14 @@ from typing import *
 import logging
 import json
 import sys
+<<<<<<< HEAD
+try:
+    import wandb
+except ImportError:
+    wandb = None
+=======
 import wandb
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 
 logger = logging.getLogger('main')
 logger.setLevel(logging.INFO)
@@ -439,6 +453,43 @@ class ProbCBR(object):
         logger.info("Hits@5 {}".format(hits_5 / total_examples))
         logger.info("Hits@10 {}".format(hits_10 / total_examples))
         logger.info("MRR {}".format(mrr / total_examples))
+<<<<<<< HEAD
+        split_label = "holdout" if args.test else "dev"
+        logger.info(
+            "FINAL_EVAL_METRICS baseline=Prob-CBR model=Prob-CBR dataset={} split={} mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}".format(
+                args.dataset_name,
+                split_label,
+                mrr / total_examples,
+                hits_1 / total_examples,
+                hits_3 / total_examples,
+                hits_10 / total_examples,
+            )
+        )
+        if hasattr(args, "_run_start_time"):
+            seconds = time.perf_counter() - args._run_start_time
+            output_root = os.environ.get("SPARSEKGC_OUTPUT_DIR")
+            if output_root:
+                timing_dir = output_root
+            else:
+                timing_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "timings")
+            os.makedirs(timing_dir, exist_ok=True)
+            path = os.path.join(timing_dir, "probcbr_metrics.csv")
+            write_header = not os.path.exists(path)
+            with open(path, "a", newline="") as f:
+                writer = csv.writer(f)
+                if write_header:
+                    writer.writerow(["Dataset", "Model", "MRR", "Hits@1", "Hits@3", "Hits@10", "seconds"])
+                writer.writerow([
+                    args.dataset_name,
+                    "Prob-CBR",
+                    f"{mrr / total_examples:.5f}",
+                    f"{hits_1 / total_examples:.5f}",
+                    f"{hits_3 / total_examples:.5f}",
+                    f"{hits_10 / total_examples:.5f}",
+                    f"{seconds:.3f}",
+                ])
+=======
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         logger.info("Avg number of nn, that do not have the query relation: {}".format(
             np.mean(self.all_zero_ctr)))
         logger.info("Avg num of returned nearest neighbors: {:2.4f}".format(np.mean(self.all_num_ret_nn)))
@@ -567,6 +618,10 @@ class ProbCBR(object):
 
 
 def main(args):
+<<<<<<< HEAD
+    args._run_start_time = time.perf_counter()
+=======
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
     dataset_name = args.dataset_name
     logger.info("==========={}============".format(dataset_name))
     data_dir = os.path.join(args.data_dir, "data", dataset_name)
@@ -585,7 +640,11 @@ def main(args):
     args.train_file = os.path.join(data_dir, "graph.txt") if dataset_name == "nell" else os.path.join(data_dir,
                                                                                                       "train.txt")
 
+<<<<<<< HEAD
+    if args.subgraph_file_name == "":
+=======
     if args.subgraph_file_name is "":
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         args.subgraph_file_name = f"paths_{args.num_paths_to_collect}_{args.max_path_len}hop"
         if args.prevent_loops:
             args.subgraph_file_name += "_no_loops"
@@ -778,6 +837,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     logger.info('COMMAND: %s' % ' '.join(sys.argv))
     if args.use_wandb:
+<<<<<<< HEAD
+        if wandb is None:
+            raise ImportError("wandb is required when --use_wandb 1")
+=======
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         wandb.init(project='pr-cbr')
 
     if args.name_of_run == "unset":

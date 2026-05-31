@@ -11,7 +11,11 @@ LR=0.001
 
 mkdir -p logs
 
+<<<<<<< HEAD
+DATASETS=("WD-singer" "FB15K-237-10" "WN18RR" "FB15K-237-20" "FB15K-237-50" "NELL23K" "FB15K-237")
+=======
 DATASETS=("WN18RR" "FB15K-237-10" "FB15K-237-20" "FB15K-237-50")
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 
 for DATASET in "${DATASETS[@]}"; do
     DATA_PATH="../../datasets/$DATASET"

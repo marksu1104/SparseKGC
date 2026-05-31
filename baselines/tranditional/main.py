@@ -1,4 +1,8 @@
 import argparse
+<<<<<<< HEAD
+import csv
+=======
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 import os
 import time
 import torch
@@ -122,7 +126,11 @@ class Trainer:
             else:
                 print('[Epoch {}]: Training Loss: {:.5}\n'.format(epoch, avg_loss))
 
+<<<<<<< HEAD
+    def evaluate(self, split='valid', epoch=0, label=None):
+=======
     def evaluate(self, split='valid', epoch=0):
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         self.model.eval()
         hits1, hits3, hits10, mrr = 0, 0, 0, 0
         total = 0
@@ -191,12 +199,39 @@ class Trainer:
         h3 = hits3 / total
         h10 = hits10 / total
         
+<<<<<<< HEAD
+        eval_label = label or split
+        print('[Epoch {} {}]: MRR: {:.5}, Hits@1: {:.5}, Hits@3: {:.5}, Hits@10: {:.5}'.format(
+            epoch, eval_label, mrr_score, h1, h3, h10))
+
+        return {'mrr': mrr_score, 'h1': h1, 'h3': h3, 'h10': h10}
+
+if __name__ == "__main__":
+    def append_metrics_csv(output_path, dataset, model, metrics, seconds):
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        write_header = not os.path.exists(output_path)
+        with open(output_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            if write_header:
+                writer.writerow(["Dataset", "Model", "MRR", "Hits@1", "Hits@3", "Hits@10", "seconds"])
+            writer.writerow([
+                dataset,
+                model,
+                f"{metrics['mrr']:.5f}",
+                f"{metrics['h1']:.5f}",
+                f"{metrics['h3']:.5f}",
+                f"{metrics['h10']:.5f}",
+                f"{seconds:.3f}",
+            ])
+
+=======
         print('[Epoch {} {}]: MRR: {:.5}, Hits@1: {:.5}, Hits@3: {:.5}, Hits@10: {:.5}'.format(
             epoch, split, mrr_score, h1, h3, h10))
             
         return {'mrr': mrr_score, 'h1': h1, 'h10': h10}
 
 if __name__ == "__main__":
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default="../../datasets/FB15K-237")
     parser.add_argument("--dataset", type=str, default="FB15K-237")
@@ -216,6 +251,42 @@ if __name__ == "__main__":
     parser.add_argument("--patience", type=int, default=25)
     
     args = parser.parse_args()
+<<<<<<< HEAD
+    run_start = time.perf_counter()
+    trainer = Trainer(args)
+    trainer.train()
+    
+    print("\nLoading best model for final evaluation...")
+    ckpt_path = os.path.join(trainer.ckpt_dir, f"best_model_{args.model}_{args.dataset}.pth")
+    if os.path.exists(ckpt_path):
+        trainer.model.load_state_dict(torch.load(ckpt_path, map_location=trainer.device))
+        print("Evaluating on holdout set...")
+        final_metrics = trainer.evaluate(split='test', epoch=0, label='holdout')
+        run_seconds = time.perf_counter() - run_start
+        print(
+            "FINAL_EVAL_METRICS baseline=traditional model={} dataset={} split=holdout mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}".format(
+                args.model,
+                args.dataset,
+                final_metrics['mrr'],
+                final_metrics['h1'],
+                final_metrics['h3'],
+                final_metrics['h10'],
+            )
+        )
+        metrics_root = os.environ.get("SPARSEKGC_OUTPUT_DIR")
+        metrics_path = (
+            os.path.join(metrics_root, "traditional_metrics.csv")
+            if metrics_root
+            else os.path.join(os.path.dirname(os.path.abspath(__file__)), "timings", "traditional_metrics.csv")
+        )
+        append_metrics_csv(
+            metrics_path,
+            args.dataset,
+            args.model,
+            final_metrics,
+            run_seconds,
+        )
+=======
     trainer = Trainer(args)
     trainer.train()
     
@@ -225,5 +296,6 @@ if __name__ == "__main__":
         trainer.model.load_state_dict(torch.load(ckpt_path, map_location=trainer.device))
         print("Evaluating on Test Set...")
         trainer.evaluate(split='test', epoch=0)
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
     else:
         print("No best model checkpoint found.")

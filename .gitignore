@@ -2,6 +2,20 @@
 baselines/**/checkpoints/
 baselines/**/log/
 baselines/**/logs/
+<<<<<<< HEAD
+baselines/**/timings/
+baselines/DacKGR/model/
+baselines/DacKGR/data/**/adj_list.pkl
+baselines/DacKGR/data/**/entity2typeid.pkl
+
+# Experiment artifacts
+outputs/
+logs/
+timings/
+*.log
+
+=======
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 
 # Python
 __pycache__/
@@ -12,3 +26,17 @@ __pycache__/
 
 # OS
 .DS_Store
+<<<<<<< HEAD
+
+# More generated artifacts
+**/__pycache__/
+*.tar
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.dat
+wandb/
+.venv/
+=======
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f

@@ -15,6 +15,10 @@ import numpy as np
 import os, sys
 import random
 import csv
+<<<<<<< HEAD
+import time
+=======
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 import torch
 
 from src.parse_args import parser
@@ -279,7 +283,51 @@ def train(lf):
         lf.load_checkpoint(args.checkpoint_path)
     lf.run_train(train_data, dev_data)
 
+<<<<<<< HEAD
+
+def log_final_metrics(metrics, dataset, model, split_label='holdout'):
+    print(
+        'FINAL_EVAL_METRICS baseline=DacKGR model={} dataset={} split={} mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}'.format(
+            model,
+            dataset,
+            split_label,
+            metrics[4],
+            metrics[0],
+            metrics[1],
+            metrics[3],
+        )
+    )
+
+
+def append_metrics_csv(dataset, model, metrics, seconds):
+    if os.environ.get("DACKGR_WRITE_METRICS", "1") == "0":
+        return
+    output_root = os.environ.get("SPARSEKGC_OUTPUT_DIR")
+    if output_root:
+        timing_dir = output_root
+    else:
+        timing_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "timings")
+    os.makedirs(timing_dir, exist_ok=True)
+    path = os.path.join(timing_dir, "dackgr_metrics.csv")
+    write_header = not os.path.exists(path)
+    with open(path, "a", newline="") as f:
+        writer = csv.writer(f)
+        if write_header:
+            writer.writerow(["Dataset", "Model", "MRR", "Hits@1", "Hits@3", "Hits@10", "seconds"])
+        writer.writerow([
+            dataset,
+            model,
+            f"{metrics[4]:.5f}",
+            f"{metrics[0]:.5f}",
+            f"{metrics[1]:.5f}",
+            f"{metrics[3]:.5f}",
+            f"{seconds:.3f}",
+        ])
+
+def inference(lf, seconds=None):
+=======
 def inference(lf):
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
     lf.batch_size = args.dev_batch_size
     lf.eval()
     if args.model == 'hypere':
@@ -378,9 +426,18 @@ def inference(lf):
         # eval_metrics['dev']['hits_at_10'] = dev_metrics[3]
         # eval_metrics['dev']['mrr'] = dev_metrics[4]
         # src.eval.hits_and_ranks(dev_data, pred_scores, lf.kg.all_objects, verbose=True)
+<<<<<<< HEAD
+        print('Final evaluation metrics:')
+        pred_scores = lf.forward(test_data, verbose=False)
+        test_metrics = src.eval.hits_and_ranks(test_data, pred_scores, lf.kg.all_objects, verbose=True, output=False, kg=lf.kg, model_name=args.model, split_relation=False)
+        log_final_metrics(test_metrics, os.path.basename(args.data_dir), args.model)
+        if seconds is not None:
+            append_metrics_csv(os.path.basename(args.data_dir), args.model, test_metrics, seconds)
+=======
         print('Test set performance:')
         pred_scores = lf.forward(test_data, verbose=False)
         test_metrics = src.eval.hits_and_ranks(test_data, pred_scores, lf.kg.all_objects, verbose=True, output=False, kg=lf.kg, model_name=args.model, split_relation=False)
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         eval_metrics['dev'] = {}
         eval_metrics['dev']['hits_at_1'] = test_metrics[0]
         eval_metrics['dev']['hits_at_3'] = test_metrics[1]
@@ -931,14 +988,24 @@ def run_experiment(args):
             elif args.run_ablation_studies:
                 run_ablation_studies(args)
             else:
+<<<<<<< HEAD
+                run_start = time.perf_counter()
+=======
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
                 initialize_model_directory(args)
                 lf = construct_model(args)
                 lf.cuda()
 
                 if args.train:
                     train(lf)
+<<<<<<< HEAD
+                    inference(lf, seconds=time.perf_counter() - run_start)
+                elif args.inference:
+                    inference(lf, seconds=time.perf_counter() - run_start)
+=======
                 elif args.inference:
                     inference(lf)
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
                 elif args.eval_by_relation_type:
                     inference(lf)
                 elif args.eval_by_seen_queries:

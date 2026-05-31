@@ -37,7 +37,11 @@ For easy comparison with other baselines, evaluation now prints one summary line
 
 Example:
 ```text
+<<<<<<< HEAD
+EVAL_STD model=HoGRN split=holdout dir=avg filtered=1 tie_aware=1 full_entity=1 mrr=... h1=... h3=... h10=...
+=======
 EVAL_STD model=HoGRN split=test dir=avg filtered=1 tie_aware=1 full_entity=1 mrr=... h1=... h3=... h10=...
+>>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 ```
 
 Fields:
