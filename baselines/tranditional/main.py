@@ -1,8 +1,5 @@
 import argparse
-<<<<<<< HEAD
 import csv
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 import os
 import time
 import torch
@@ -126,112 +123,118 @@ class Trainer:
             else:
                 print('[Epoch {}]: Training Loss: {:.5}\n'.format(epoch, avg_loss))
 
-<<<<<<< HEAD
-    def evaluate(self, split='valid', epoch=0, label=None):
-=======
-    def evaluate(self, split='valid', epoch=0):
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
-        self.model.eval()
+    def _run_eval_pass(self, eval_triples):
+        """Runs filtered, tie-aware, full-entity ranking over a list of (h, r, t) queries."""
         hits1, hits3, hits10, mrr = 0, 0, 0, 0
         total = 0
-        
-        queries = getattr(self.kg_data, f"{split}_triples")
-        
-        # Unified evaluation protocol:
-        # 1) Bidirectional evaluation via inverse relation queries
-        # 2) Filtered setting
-        # 3) Tie-aware ranking
-        # 4) Full-entity ranking (score against all entities)
 
-        # Create a combined list of (h, r, t) queries
-        # 1. Original (Tail Pred): (h, r, t)
-        # 2. Inverse (Head Pred): (t, r_inv, h)
-        
-        eval_triples_all = []
-        eval_triples_all.extend(queries) # Tail pred
-        
-        # Calculate offset for inverse relations
-        # num_base_rel = num_rel / 2
-        num_base_rel = self.args.num_rel // 2
-        
-        # Only add inverse if we are sure the model knows about them (always true if add_inverse=True)
-        if self.kg_data.add_inverse:
-             for h, r, t in queries:
-                 eval_triples_all.append((t, r + num_base_rel, h)) # Head pred using inverse relation
-        
-        # Use full 1-vs-All dataset filtering structure
-        eval_dataset = EvalDataset(eval_triples_all, self.kg_data.all_sr2o, self.args.num_ent)
+        eval_dataset = EvalDataset(eval_triples, self.kg_data.all_sr2o, self.args.num_ent)
         data_loader = DataLoader(eval_dataset, batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
-        
+
         with torch.no_grad():
             for batch in data_loader:
                 triples = batch[0].to(self.device)
                 labels = batch[1].to(self.device) # Multi-hot of ALL known tails
-                
+
                 h, r, t = triples[:, 0], triples[:, 1], triples[:, 2]
-                
+
                 # Get scores for all entities
                 scores = self.model(h, r)
-                
+
                 # Filtered Setting
                 b_range = torch.arange(scores.size(0), device=self.device)
                 target_score = scores[b_range, t]
-                
-                # Mask all true tails to -1e7 
+
+                # Mask all true tails to -1e7
                 scores = scores.masked_fill(labels.bool(), -1e7)
                 scores[b_range, t] = target_score
-                
+
                 # Tie-aware rank (average rank among ties):
                 # rank = greater + (equal + 1) / 2
                 # where equal includes the target entity itself.
                 greater = (scores > target_score.unsqueeze(1)).sum(dim=1).float()
                 equal = (scores == target_score.unsqueeze(1)).sum(dim=1).float()
                 rank = greater + (equal + 1.0) / 2.0
-                
+
                 mrr += (1.0 / rank).sum().item()
                 hits1 += (rank <= 1).sum().item()
                 hits3 += (rank <= 3).sum().item()
                 hits10 += (rank <= 10).sum().item()
                 total += scores.size(0)
-        
-        mrr_score = mrr / total
-        h1 = hits1 / total
-        h3 = hits3 / total
-        h10 = hits10 / total
-        
-<<<<<<< HEAD
-        eval_label = label or split
-        print('[Epoch {} {}]: MRR: {:.5}, Hits@1: {:.5}, Hits@3: {:.5}, Hits@10: {:.5}'.format(
-            epoch, eval_label, mrr_score, h1, h3, h10))
 
-        return {'mrr': mrr_score, 'h1': h1, 'h3': h3, 'h10': h10}
+        return {
+            'mrr': mrr / total,
+            'h1': hits1 / total,
+            'h3': hits3 / total,
+            'h10': hits10 / total,
+        }
+
+    def evaluate(self, split='valid', epoch=0, label=None):
+        self.model.eval()
+
+        queries = getattr(self.kg_data, f"{split}_triples")
+
+        # Unified evaluation protocol:
+        # 1) Bidirectional evaluation via inverse relation queries (tail pred + head pred via inverse)
+        # 2) Filtered setting
+        # 3) Tie-aware ranking
+        # 4) Full-entity ranking (score against all entities)
+
+        # Calculate offset for inverse relations: num_base_rel = num_rel / 2
+        num_base_rel = self.args.num_rel // 2
+
+        tail_queries = list(queries)
+        head_queries = [(t, r + num_base_rel, h) for h, r, t in queries] if self.kg_data.add_inverse else []
+
+        tail_results = self._run_eval_pass(tail_queries)
+        head_results = self._run_eval_pass(head_queries) if head_queries else tail_results
+
+        results = {}
+        for key in ('mrr', 'h1', 'h3', 'h10'):
+            results[f'{key}_tail'] = tail_results[key]
+            results[f'{key}_head'] = head_results[key]
+            results[f'{key}_avg'] = (tail_results[key] + head_results[key]) / 2.0
+        # Backwards-compatible aliases pointing at the bidirectional average
+        results['mrr'] = results['mrr_avg']
+        results['h1'] = results['h1_avg']
+        results['h3'] = results['h3_avg']
+        results['h10'] = results['h10_avg']
+
+        eval_label = label or split
+        print('[Epoch {} {}]: MRR: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(
+            epoch, eval_label, results['mrr_tail'], results['mrr_head'], results['mrr_avg']))
+        for k, key in ((1, 'h1'), (3, 'h3'), (10, 'h10')):
+            print('[Epoch {} {}]: Hits@{}: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(
+                epoch, eval_label, k, results[f'{key}_tail'], results[f'{key}_head'], results[f'{key}_avg']))
+
+        return results
 
 if __name__ == "__main__":
+    METRICS_CSV_HEADER = [
+        "Dataset", "Model",
+        "MRR_Tail", "MRR_Head", "MRR_Avg",
+        "Hits@1_Tail", "Hits@1_Head", "Hits@1_Avg",
+        "Hits@3_Tail", "Hits@3_Head", "Hits@3_Avg",
+        "Hits@10_Tail", "Hits@10_Head", "Hits@10_Avg",
+        "seconds",
+    ]
+
     def append_metrics_csv(output_path, dataset, model, metrics, seconds):
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         write_header = not os.path.exists(output_path)
         with open(output_path, "a", newline="") as f:
             writer = csv.writer(f)
             if write_header:
-                writer.writerow(["Dataset", "Model", "MRR", "Hits@1", "Hits@3", "Hits@10", "seconds"])
+                writer.writerow(METRICS_CSV_HEADER)
             writer.writerow([
                 dataset,
                 model,
-                f"{metrics['mrr']:.5f}",
-                f"{metrics['h1']:.5f}",
-                f"{metrics['h3']:.5f}",
-                f"{metrics['h10']:.5f}",
+                f"{metrics['mrr_tail']:.5f}", f"{metrics['mrr_head']:.5f}", f"{metrics['mrr_avg']:.5f}",
+                f"{metrics['h1_tail']:.5f}", f"{metrics['h1_head']:.5f}", f"{metrics['h1_avg']:.5f}",
+                f"{metrics['h3_tail']:.5f}", f"{metrics['h3_head']:.5f}", f"{metrics['h3_avg']:.5f}",
+                f"{metrics['h10_tail']:.5f}", f"{metrics['h10_head']:.5f}", f"{metrics['h10_avg']:.5f}",
                 f"{seconds:.3f}",
             ])
-
-=======
-        print('[Epoch {} {}]: MRR: {:.5}, Hits@1: {:.5}, Hits@3: {:.5}, Hits@10: {:.5}'.format(
-            epoch, split, mrr_score, h1, h3, h10))
-            
-        return {'mrr': mrr_score, 'h1': h1, 'h10': h10}
-
-if __name__ == "__main__":
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default="../../datasets/FB15K-237")
     parser.add_argument("--dataset", type=str, default="FB15K-237")
@@ -251,28 +254,33 @@ if __name__ == "__main__":
     parser.add_argument("--patience", type=int, default=25)
     
     args = parser.parse_args()
-<<<<<<< HEAD
+
     run_start = time.perf_counter()
     trainer = Trainer(args)
     trainer.train()
-    
+
     print("\nLoading best model for final evaluation...")
     ckpt_path = os.path.join(trainer.ckpt_dir, f"best_model_{args.model}_{args.dataset}.pth")
     if os.path.exists(ckpt_path):
         trainer.model.load_state_dict(torch.load(ckpt_path, map_location=trainer.device))
-        print("Evaluating on holdout set...")
-        final_metrics = trainer.evaluate(split='test', epoch=0, label='holdout')
+        print("Evaluating on test set...")
+        final_metrics = trainer.evaluate(split='test', epoch=0, label='test')
         run_seconds = time.perf_counter() - run_start
         print(
-            "FINAL_EVAL_METRICS baseline=traditional model={} dataset={} split=holdout mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}".format(
-                args.model,
-                args.dataset,
-                final_metrics['mrr'],
-                final_metrics['h1'],
-                final_metrics['h3'],
-                final_metrics['h10'],
+            "FINAL_EVAL_METRICS baseline=traditional model={} dataset={} split=test "
+            "mrr_tail={:.5f} mrr_head={:.5f} mrr_avg={:.5f} "
+            "h1_tail={:.5f} h1_head={:.5f} h1_avg={:.5f} "
+            "h3_tail={:.5f} h3_head={:.5f} h3_avg={:.5f} "
+            "h10_tail={:.5f} h10_head={:.5f} h10_avg={:.5f}".format(
+                args.model, args.dataset,
+                final_metrics['mrr_tail'], final_metrics['mrr_head'], final_metrics['mrr_avg'],
+                final_metrics['h1_tail'], final_metrics['h1_head'], final_metrics['h1_avg'],
+                final_metrics['h3_tail'], final_metrics['h3_head'], final_metrics['h3_avg'],
+                final_metrics['h10_tail'], final_metrics['h10_head'], final_metrics['h10_avg'],
             )
         )
+        print("RUNTIME_STD baseline=traditional model={} dataset={} seconds={:.3f}".format(
+            args.model, args.dataset, run_seconds))
         metrics_root = os.environ.get("SPARSEKGC_OUTPUT_DIR")
         metrics_path = (
             os.path.join(metrics_root, "traditional_metrics.csv")
@@ -286,16 +294,5 @@ if __name__ == "__main__":
             final_metrics,
             run_seconds,
         )
-=======
-    trainer = Trainer(args)
-    trainer.train()
-    
-    print("\nLoading best model for Test evaluation...")
-    ckpt_path = os.path.join(trainer.ckpt_dir, f"best_model_{args.model}_{args.dataset}.pth")
-    if os.path.exists(ckpt_path):
-        trainer.model.load_state_dict(torch.load(ckpt_path, map_location=trainer.device))
-        print("Evaluating on Test Set...")
-        trainer.evaluate(split='test', epoch=0)
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
     else:
         print("No best model checkpoint found.")

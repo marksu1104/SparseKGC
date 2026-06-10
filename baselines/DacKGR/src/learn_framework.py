@@ -9,7 +9,6 @@
 
 import os
 import random
-import shutil
 from tqdm import tqdm
 import sys
 import numpy as np
@@ -51,35 +50,13 @@ class LFramework(nn.Module):
         self.kg = kg
         self.mdl = mdl
         self.gpu_id = args.gpu
-        self.original_train_data = self.load_original_train_data()
-        
-        # Initialize metric files
-        for filename in ['train_losses.dat', 'dev_losses.dat', 'dev_mrrs.dat', 'train_mrrs.dat']:
-            with open(os.path.join(self.model_dir, filename), 'w') as f:
-                f.write('')  # Create empty file
-        
-        print('{} module created'.format(self.model))
 
-    def load_original_train_data(self):
-        """
-        Load original train data in dev format (e1, e2, r) for MRR calculation.
-        This avoids the grouping issues of the regular train_data.
-        """
-        if not hasattr(self, 'original_train_data') or self.original_train_data is None:
-            import src.data_utils as data_utils
-            train_path = os.path.join(self.data_dir, 'train.triples')
-            entity_index_path = os.path.join(self.data_dir, 'entity2id.txt')
-            relation_index_path = os.path.join(self.data_dir, 'relation2id.txt')
-            
-            # Load train data without grouping (like dev data format)
-            self.original_train_data = data_utils.load_triples(
-                train_path, entity_index_path, relation_index_path, 
-                group_examples_by_query=False,  # This is the key difference
-                add_reverse_relations=False,    # Don't add reverse for evaluation
-                verbose=False  # Reduce output
-            )
-            print('{} original train triples loaded for MRR calculation'.format(len(self.original_train_data)))
-        return self.original_train_data
+        # Initialize metric files
+        for filename in ['train_losses.dat', 'dev_mrrs.dat']:
+            with open(os.path.join(self.model_dir, filename), 'w') as f:
+                f.write('')
+
+        print('{} module created'.format(self.model))
 
     def print_all_model_parameters(self):
         print('\nModel Parameters')
@@ -97,9 +74,11 @@ class LFramework(nn.Module):
         if self.optim is None:
             self.optim = optim.Adam(filter(lambda p: p.requires_grad, self.parameters()), lr=self.learning_rate)
 
-        # Track dev metrics changes
+        # Track dev metrics changes and stop when dev has not improved for
+        # num_wait_epochs evaluation checkpoints.
         best_dev_metrics = 0
         dev_metrics_history = []
+        bad_eval_count = 0
 
         for epoch_id in range(self.start_epoch, self.num_epochs):
             print('Epoch {}'.format(epoch_id))
@@ -143,60 +122,22 @@ class LFramework(nn.Module):
                 stdout_msg += 'entropy = {}'.format(np.mean(entropies))
             print(stdout_msg)
             sys.stdout.flush()
-            
-            # Calculate and record dev loss every epoch
-            self.eval()
-            original_batch_size = self.batch_size
-            self.batch_size = self.dev_batch_size
-            dev_batch_losses = []
-            for example_id in range(0, len(dev_data), self.batch_size):
-                mini_batch = dev_data[example_id:example_id + self.batch_size]
-                if len(mini_batch) < self.batch_size:
-                    continue
-                with torch.no_grad():
-                    loss = self.loss(mini_batch)
-                    dev_batch_losses.append(loss['print_loss'])
-            
-            avg_dev_loss = np.mean(dev_batch_losses) if dev_batch_losses else 0.0
-            
-            # Record dev loss
-            with open(os.path.join(self.model_dir, 'dev_losses.dat'), 'a') as f:
-                f.write('{}\\n'.format(avg_dev_loss))
-            
-            self.batch_size = original_batch_size  # Restore batch size
-            print('Train Loss: {:.6f}, Dev Loss: {:.6f}'.format(avg_train_loss, avg_dev_loss))
-            
+
             if epoch_id % self.num_wait_epochs == self.num_wait_epochs - 1 or epoch_id == self.num_epochs - 1:
-                self.save_checkpoint(checkpoint_id=epoch_id, epoch_id=epoch_id)
+                self.save_checkpoint(epoch_id=epoch_id)
 
             # Check dev set performance
             if epoch_id % self.num_wait_epochs == self.num_wait_epochs - 1:
                 self.eval()
                 self.batch_size = self.dev_batch_size
-                
-                # Calculate train MRR
-                original_train_data = self.original_train_data
-                with torch.no_grad():
-                    train_scores = self.forward(original_train_data, verbose=False)
-                    train_mrr = src.eval.compute_mrr_only(original_train_data, train_scores, self.kg.train_objects, verbose=False)
-                    
-                    # Record train MRR
-                    with open(os.path.join(self.model_dir, 'train_mrrs.dat'), 'a') as f:
-                        f.write('{}\n'.format(train_mrr))
-                    
-                    del train_scores  # Clean up memory
-                
-                # Calculate dev MRR
+
                 with torch.no_grad():
                     dev_scores = self.forward(dev_data, verbose=False)
-                    print('Dev set performance: (correct evaluation)')
+                    print('Dev set performance:')
                     _, _, _, _, mrr = src.eval.hits_and_ranks(dev_data, dev_scores, self.kg.dev_objects, verbose=True, kg=self.kg)
-                    
-                    # Record dev MRR
+
                     with open(os.path.join(self.model_dir, 'dev_mrrs.dat'), 'a') as f:
                         f.write('{}\n'.format(mrr))
-                    
-                    print('Train MRR: {:.4f}, Dev MRR: {:.4f}'.format(train_mrr, mrr))
                     
                     metrics = mrr
                     # Action dropout anneaking
@@ -209,10 +150,17 @@ class LFramework(nn.Module):
                                 old_action_dropout_rate, self.action_dropout_rate))
                     # Save checkpoint
                     if metrics > best_dev_metrics:
-                        self.save_checkpoint(checkpoint_id=epoch_id, epoch_id=epoch_id, is_best=True)
+                        self.save_checkpoint(epoch_id=epoch_id, is_best=True)
                         best_dev_metrics = metrics
+                        bad_eval_count = 0
                         with open(os.path.join(self.model_dir, 'best_dev_iteration.dat'), 'w') as o_f:
                             o_f.write('{}'.format(epoch_id))
+                    else:
+                        bad_eval_count += 1
+                        if bad_eval_count >= self.num_wait_epochs:
+                            print('Early Stopping!!')
+                            sys.stdout.flush()
+                            return
                     dev_metrics_history.append(metrics)
 
         print('FINISH_TRAIN...')
@@ -277,10 +225,11 @@ class LFramework(nn.Module):
         for _ in range(batch_size - len(mini_batch)):
             mini_batch.append(dummy_example)
 
-    def save_checkpoint(self, checkpoint_id, epoch_id=None, is_best=False):
+    def save_checkpoint(self, epoch_id=None, is_best=False):
         """
-        Save model checkpoint.
-        :param checkpoint_id: Model checkpoint index assigned by training loop.
+        Save model checkpoint. Only the latest (for resume) and the best
+        (on dev set) checkpoints are kept on disk -- earlier checkpoints are
+        overwritten in place rather than accumulating one file per save.
         :param epoch_id: Model epoch index assigned by training loop.
         :param is_best: if set, the model being saved is the best model on dev set.
         """
@@ -288,12 +237,12 @@ class LFramework(nn.Module):
         checkpoint_dict['state_dict'] = self.state_dict()
         checkpoint_dict['epoch_id'] = epoch_id
 
-        out_tar = os.path.join(self.model_dir, 'checkpoint-{}.tar'.format(checkpoint_id))
         if is_best:
-            best_path = os.path.join(self.model_dir, 'model_best.tar')
-            shutil.copyfile(out_tar, best_path)
-            print('=> best model updated \'{}\''.format(best_path))
+            out_tar = os.path.join(self.model_dir, 'model_best.tar')
+            torch.save(checkpoint_dict, out_tar)
+            print('=> best model updated \'{}\''.format(out_tar))
         else:
+            out_tar = os.path.join(self.model_dir, 'checkpoint-latest.tar')
             torch.save(checkpoint_dict, out_tar)
             print('=> saving checkpoint to \'{}\''.format(out_tar))
 

@@ -3,12 +3,18 @@ from data_loader import *
 from model.models import *
 
 import os, time, argparse, csv, pickle
-<<<<<<< HEAD
 from pathlib import Path
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 import numpy as np
 import torch
+
+METRICS_CSV_HEADER = [
+    "Dataset", "Model",
+    "MRR_Tail", "MRR_Head", "MRR_Avg",
+    "Hits@1_Tail", "Hits@1_Head", "Hits@1_Avg",
+    "Hits@3_Tail", "Hits@3_Head", "Hits@3_Avg",
+    "Hits@10_Tail", "Hits@10_Head", "Hits@10_Avg",
+    "seconds",
+]
 
 class Runner(object):
 
@@ -18,7 +24,6 @@ class Runner(object):
         """
 
         # Build the mapping table from all the data
-<<<<<<< HEAD
         def parse_triple(line):
             parts = line.strip().split('\t')[:3]
             if len(parts) < 3:
@@ -33,14 +38,9 @@ class Runner(object):
 
         ent_set, rel_set = OrderedSet(), OrderedSet()
         for split in ['train', 'test', 'valid']:
-            for line in open('./data/{}/{}.txt'.format(self.p.dataset, split)):
+            data_path = os.path.join(self.p.data_dir, self.p.dataset, f"{split}.txt")
+            for line in open(data_path):
                 sub, obj, rel = parse_triple(line)
-=======
-        ent_set, rel_set = OrderedSet(), OrderedSet()
-        for split in ['train', 'test', 'valid']:
-            for line in open('./data/{}/{}.txt'.format(self.p.dataset, split)):
-                sub, obj, rel = map(str.lower, line.strip().split('\t')[:3])
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
                 ent_set.add(sub)
                 rel_set.add(rel)
                 ent_set.add(obj)
@@ -63,12 +63,9 @@ class Runner(object):
         self.data = ddict(list)
         sr2o = ddict(set) 
         for split in ['train', 'test', 'valid']:
-            for line in open('./data/{}/{}.txt'.format(self.p.dataset, split)):
-<<<<<<< HEAD
+            data_path = os.path.join(self.p.data_dir, self.p.dataset, f"{split}.txt")
+            for line in open(data_path):
                 sub, obj, rel = parse_triple(line)
-=======
-                sub, obj, rel = map(str.lower, line.strip().split('\t')[:3])
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
                 sub, rel, obj = self.ent2id[sub], self.rel2id[rel], self.ent2id[obj]
                 self.data[split].append((sub, rel, obj))
 
@@ -154,6 +151,10 @@ class Runner(object):
         self.logger.info(vars(self.p))
         pprint(vars(self.p))
 
+        # Keep checkpoints local to the HoGRN folder (do not place them under outputs/)
+        self.checkpoint_root = os.path.join('.', 'checkpoints')
+        os.makedirs(self.checkpoint_root, exist_ok=True)
+
         if self.p.gpu != '-1' and torch.cuda.is_available():
             self.device = torch.device('cuda')
             torch.cuda.set_rng_state(torch.cuda.get_rng_state())
@@ -210,10 +211,7 @@ class Runner(object):
             'optimizer'		: self.optimizer.state_dict(),
             'args'			: vars(self.p)
         }
-<<<<<<< HEAD
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         torch.save(state, save_path)
 
     def load_model(self, load_path):
@@ -235,11 +233,7 @@ class Runner(object):
         state = torch.load(load_path)
         return state.get('args', None)
 
-<<<<<<< HEAD
     def evaluate(self, split, epoch, emit_detail=True):
-=======
-    def evaluate(self, split, epoch):
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         """
         Function to evaluate the model on validation or test set
 
@@ -259,8 +253,7 @@ class Runner(object):
         left_results  = self.predict(split=split, mode='tail_batch')
         right_results = self.predict(split=split, mode='head_batch')
         results       = get_combined_results(left_results, right_results)
-<<<<<<< HEAD
-        log_split = 'holdout' if split == 'test' else split
+        log_split = split
         if emit_detail:
             self.logger.info('[Epoch {} {}]: MRR: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(epoch, log_split, results['left_mrr'], results['right_mrr'], results['mrr']))
             self.logger.info('[Epoch {} {}]: MR: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(epoch, log_split, results['left_mr'], results['right_mr'], results['mr']))
@@ -270,71 +263,44 @@ class Runner(object):
             for k in range(10):
                 self.logger.info('[Epoch {} {}]: Hit@{}: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(epoch, log_split, k+1, results['left_hits@{}'.format(k+1)], results['right_hits@{}'.format(k+1)], results['hits@{}'.format(k+1)]))
 
-        if emit_detail:
-            self.logger.info(
-                'EVAL_STD model=HoGRN split={} dir=avg filtered=1 tie_aware=1 full_entity=1 mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}'.format(
-                    log_split,
-                    results['mrr'],
-                    results['hits@1'],
-                    results['hits@3'],
-                    results['hits@10']
-                )
-            )
-
         return results
 
-    def log_final_metrics(self, results, split_label='holdout'):
+    def log_final_metrics(self, results, split_label='test'):
         self.logger.info(
-            'FINAL_EVAL_METRICS baseline=HoGRN model={} dataset={} split={} mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}'.format(
-                self.p.score_func,
-                self.p.dataset,
-                split_label,
-=======
-        self.logger.info('[Epoch {} {}]: MRR: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(epoch, split, results['left_mrr'], results['right_mrr'], results['mrr']))
-        self.logger.info('[Epoch {} {}]: MR: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(epoch, split, results['left_mr'], results['right_mr'], results['mr']))
-        # for k in range(10):
-        # 	self.logger.info('[Epoch {} {}]: Hit@{}: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(epoch, split, k+1, results['left_hits@{}'.format(k+1)], results['right_hits@{}'.format(k+1)], results['hits@{}'.format(k+1)]))
-        if split == 'test':
-            for k in range(10):
-                self.logger.info('[Epoch {} {}]: Hit@{}: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(epoch, split, k+1, results['left_hits@{}'.format(k+1)], results['right_hits@{}'.format(k+1)], results['hits@{}'.format(k+1)]))
-
-        self.logger.info(
-            'EVAL_STD model=HoGRN split={} dir=avg filtered=1 tie_aware=1 full_entity=1 mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}'.format(
-                split,
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
-                results['mrr'],
-                results['hits@1'],
-                results['hits@3'],
-                results['hits@10']
+            'FINAL_EVAL_METRICS baseline=HoGRN model={} dataset={} split={} '
+            'mrr_tail={:.5f} mrr_head={:.5f} mrr_avg={:.5f} '
+            'h1_tail={:.5f} h1_head={:.5f} h1_avg={:.5f} '
+            'h3_tail={:.5f} h3_head={:.5f} h3_avg={:.5f} '
+            'h10_tail={:.5f} h10_head={:.5f} h10_avg={:.5f}'.format(
+                self.p.score_func, self.p.dataset, split_label,
+                results['left_mrr'], results['right_mrr'], results['mrr'],
+                results['left_hits@1'], results['right_hits@1'], results['hits@1'],
+                results['left_hits@3'], results['right_hits@3'], results['hits@3'],
+                results['left_hits@10'], results['right_hits@10'], results['hits@10'],
             )
         )
 
-<<<<<<< HEAD
     def append_metrics_csv(self, results, seconds):
         output_root = os.environ.get("SPARSEKGC_OUTPUT_DIR")
-        if output_root:
-            timing_dir = Path(output_root)
-        else:
-            timing_dir = Path("timings")
+        timing_dir = Path(output_root) if output_root else Path("timings") / "hogrn"
         timing_dir.mkdir(parents=True, exist_ok=True)
         path = timing_dir / "hogrn_metrics.csv"
         write_header = not path.exists()
         with path.open("a", newline="") as f:
             writer = csv.writer(f)
             if write_header:
-                writer.writerow(["Dataset", "Model", "MRR", "Hits@1", "Hits@3", "Hits@10", "seconds"])
+                writer.writerow(METRICS_CSV_HEADER)
             writer.writerow([
                 self.p.dataset,
                 self.p.score_func,
-                f"{results['mrr']:.5f}",
-                f"{results['hits@1']:.5f}",
-                f"{results['hits@3']:.5f}",
-                f"{results['hits@10']:.5f}",
+                f"{results['left_mrr']:.5f}", f"{results['right_mrr']:.5f}", f"{results['mrr']:.5f}",
+                f"{results['left_hits@1']:.5f}", f"{results['right_hits@1']:.5f}", f"{results['hits@1']:.5f}",
+                f"{results['left_hits@3']:.5f}", f"{results['right_hits@3']:.5f}", f"{results['hits@3']:.5f}",
+                f"{results['left_hits@10']:.5f}", f"{results['right_hits@10']:.5f}", f"{results['hits@10']:.5f}",
                 f"{seconds:.3f}",
             ])
-=======
-        return results
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
+        self.logger.info('RUNTIME_STD baseline=HoGRN model={} dataset={} seconds={:.3f}'.format(
+            self.p.score_func, self.p.dataset, seconds))
 
     def predict(self, split='valid', mode='tail_batch'):
         """
@@ -375,7 +341,8 @@ class Runner(object):
         CSV 欄位: index, split, mode, head, relation, tail, head_id, rel_id, tail_id, rank, target_score, top1_ent, top1_score, topk_pred
         pkl: (top1_error_indices, top10_error_indices)
         """
-        save_dir = os.path.join('./checkpoints', f'{self.p.dataset}_error_cases')
+        # Save error cases locally under the HoGRN folder (do not write into outputs/)
+        save_dir = os.path.join('.', 'error_cases', f'{self.p.dataset}')
         os.makedirs(save_dir, exist_ok=True)
         csv_path = os.path.join(save_dir, f'{split}_error_cases.csv')
         pkl_path = os.path.join(save_dir, f'{split}_error_cases.pkl')
@@ -485,22 +452,21 @@ class Runner(object):
         """
         Function to run training and evaluation of model.
         """
-<<<<<<< HEAD
         run_start = getattr(self.p, '_run_start_time', time.perf_counter())
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         self.best_val_mrr, self.best_val, self.best_epoch, val_mrr = 0., {}, 0, 0.
-        save_path = os.path.join('./checkpoints', self.p.name)
+        # Stable per dataset+score_func so reruns overwrite the previous best
+        # checkpoint instead of accumulating one timestamped file per run.
+        save_path = os.path.join(self.checkpoint_root, f'{self.p.dataset}_{self.p.score_func}_best')
 
         # 如果只有 dump_errors 而沒有 restore，嘗試從資料集資料夾載入模型
         if getattr(self.p, 'dump_errors', False) and not self.p.restore:
-            # 嘗試從 ./checkpoints/{dataset}/{dataset}_hogrn_pattern_eval 載入
-            dataset_checkpoint_dir = os.path.join('./checkpoints', self.p.dataset)
+            # 嘗試從 checkpoint root 中的 {dataset}/{dataset}_hogrn_pattern_eval 載入
+            dataset_checkpoint_dir = os.path.join(self.checkpoint_root, self.p.dataset)
             dataset_checkpoint_file = os.path.join(dataset_checkpoint_dir, f'{self.p.dataset}_hogrn_pattern_eval')
-            
+
             if os.path.exists(dataset_checkpoint_file):
                 self.logger.info(f'Inference mode: Loading model from {dataset_checkpoint_file}')
-                
+
                 # 載入 checkpoint 中保存的參數
                 saved_args = self.load_checkpoint_args(dataset_checkpoint_file)
                 if saved_args:
@@ -510,17 +476,17 @@ class Runner(object):
                     for key, value in saved_args.items():
                         if key not in inference_params:
                             setattr(self.p, key, value)
-                    
+
                     # 重新初始化模型和優化器
                     self.model = self.add_model(self.p.model, self.p.score_func)
                     self.optimizer = self.add_optimizer(self.model.parameters())
-                
+
                 self.load_model(dataset_checkpoint_file)
                 self.logger.info('Successfully loaded dataset checkpoint')
-                
+
                 test_results = self.evaluate('test', self.best_epoch)
                 self.logger.info('Test Avg MRR: {:.5}'.format(test_results['mrr']))
-                self.dump_error_cases('test', topk=getattr(self.p, 'topk', 10))  
+                self.dump_error_cases('test', topk=getattr(self.p, 'topk', 10))
                 self.dump_error_cases('valid', topk=getattr(self.p, 'topk', 10))
                 self.dump_error_cases('train', topk=getattr(self.p, 'topk', 10))
                 return
@@ -534,16 +500,11 @@ class Runner(object):
         # 如果同時有 restore 和 dump_errors，直接進行 inference 模式
         if self.p.restore and getattr(self.p, 'dump_errors', False):
             self.logger.info('Inference mode: skipping training, only evaluating and dumping errors')
-<<<<<<< HEAD
             test_results = self.evaluate('test', self.best_epoch, emit_detail=False)
             self.logger.info('Final Avg MRR: {:.5}'.format(test_results['mrr']))
             self.log_final_metrics(test_results)
             self.append_metrics_csv(test_results, time.perf_counter() - run_start)
-=======
-            test_results = self.evaluate('test', self.best_epoch)
-            self.logger.info('Test Avg MRR: {:.5}'.format(test_results['mrr']))
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
-            self.dump_error_cases('test', topk=getattr(self.p, 'topk', 10))  
+            self.dump_error_cases('test', topk=getattr(self.p, 'topk', 10))
             self.dump_error_cases('valid', topk=getattr(self.p, 'topk', 10))
             self.dump_error_cases('train', topk=getattr(self.p, 'topk', 10))
             return
@@ -553,45 +514,38 @@ class Runner(object):
         for epoch in range(self.p.max_epochs):
             print("########")
             t0 = time.time()
-            train_loss  = self.run_epoch(epoch, val_mrr)
-            print("Time cost in one epoch for training: {:.4f}s".format((time.time()-t0)))
+            train_loss = self.run_epoch(epoch, val_mrr)
+            print("Time cost in one epoch for training: {:.4f}s".format((time.time() - t0)))
 
             val_results = self.evaluate('valid', epoch)
-            
+
             if val_results['mrr'] > self.best_val_mrr:
-                self.best_val	   = val_results
-                self.best_val_mrr  = val_results['mrr']
-                self.best_epoch	   = epoch
+                self.best_val = val_results
+                self.best_val_mrr = val_results['mrr']
+                self.best_epoch = epoch
                 self.save_model(save_path)
                 kill_cnt = 0
             else:
                 kill_cnt += 1
                 if kill_cnt % 10 == 0 and self.p.gamma > 5:
-                    self.p.gamma -= 5 
+                    self.p.gamma -= 5
                     self.logger.info('Gamma decay on saturation, updated value of gamma: {}'.format(self.p.gamma))
-                if kill_cnt > 25: 
+                if kill_cnt > 25:
                     self.logger.info("Early Stopping!!")
                     break
 
             self.logger.info('[Epoch {}]: Training Loss: {:.5}, Best Valid MRR: {:.5}\n\n'.format(epoch, train_loss, self.best_val_mrr))
             # print("Total time cost in one epoch: {:.4f}s".format((time.time()-t0)/60))
 
-<<<<<<< HEAD
-        self.logger.info('Loading best model, evaluating on holdout data')
+        self.logger.info('Loading best model, evaluating on test data')
         self.load_model(save_path)
         test_results = self.evaluate('test', epoch, emit_detail=False)
         self.logger.info('Final Avg MRR: {:.5}'.format(test_results['mrr']))
         self.log_final_metrics(test_results)
         self.append_metrics_csv(test_results, time.perf_counter() - run_start)
-=======
-        self.logger.info('Loading best model, Evaluating on Test data')
-        self.load_model(save_path)
-        test_results = self.evaluate('test', epoch)
-        self.logger.info('Test Avg MRR: {:.5}'.format(test_results['mrr']))
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
-        
+
         if getattr(self.p, 'dump_errors', False):
-            self.dump_error_cases('test', topk=getattr(self.p, 'topk', 10))  
+            self.dump_error_cases('test', topk=getattr(self.p, 'topk', 10))
             self.dump_error_cases('valid', topk=getattr(self.p, 'topk', 10))
             self.dump_error_cases('train', topk=getattr(self.p, 'topk', 10))
 
@@ -649,8 +603,11 @@ if __name__ == '__main__':
     parser.add_argument('-num_filt',  	dest='num_filt', 	default=32,   	type=int, 	help='ConvE: Number of filters in convolution')
     parser.add_argument('-ker_sz',    	dest='ker_sz', 		default=3,   	type=int, 	help='ConvE: Kernel size to use')
 
-    parser.add_argument('-logdir',		dest='log_dir',		default='./log/',		help='Log directory')
+    # Default to local log directory inside the HoGRN folder (do not write to outputs/ by default)
+    default_log_dir = os.path.join('.', 'log')
+    parser.add_argument('-logdir',		dest='log_dir',	default=default_log_dir,		help='Log directory')
     parser.add_argument('-config',		dest='config_dir',	default='./config/',	help='Config directory')
+    parser.add_argument('-data_root', dest='data_dir', default=os.environ.get("SPARSEKGC_DATA_DIR", "../../datasets"), help='Dataset root directory')
     
     parser.add_argument('-dump_errors', action='store_true', help='Dump error cases (CSV/PKL) for valid/test')
     parser.add_argument('-topk',        type=int, default=10, help='Top-K predictions to export for each case')
@@ -672,9 +629,6 @@ if __name__ == '__main__':
         torch.backends.cudnn.deterministic = True
     # torch.autograd.set_detect_anomaly(True)
     
-<<<<<<< HEAD
     args._run_start_time = time.perf_counter()
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
     model = Runner(args)
     model.fit()

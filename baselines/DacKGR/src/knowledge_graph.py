@@ -59,7 +59,7 @@ class KnowledgeGraph(nn.Module):
         if self.args.model == 'PTransE':
             self.load_path(args.data_dir)
         self.load_graph_data(args.data_dir)
-        self.load_all_answers(args.data_dir)
+        self.load_all_answers(args.data_dir, add_reversed_edges=True)
 
         # Define NN Modules
         self.entity_dim = args.entity_dim

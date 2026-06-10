@@ -172,7 +172,7 @@ def run_with_tee(cmd, log_file, dataset, dry_run=False):
         print(f"Time   | {timestamp()}", flush=True)
         print(f"Result | baseline=Prob-CBR | model=Prob-CBR | dataset={dataset}", flush=True)
         print("  valid  : not_run", flush=True)
-        print(f"  holdout: {final_line or 'not_found'}")
+        print(f"  test   : {final_line or 'not_found'}")
         print(f"  seconds: {seconds:.3f}", flush=True)
         print(f"  log    : {log_file}", flush=True)
         print("-" * 72, flush=True)
@@ -185,7 +185,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run Prob-CBR on SparseKGC datasets")
     parser.add_argument("--datasets", nargs="+", default=DATASETS)
     parser.add_argument("--data_root", default="prob-cbr-data")
-    parser.add_argument("--expt_root", default="prob-cbr-expts")
+    # If caller did not provide --expt_root, prefer SPARSEKGC_OUTPUT_DIR/probcbr when available
+    parser.add_argument("--expt_root", default=None)
     parser.add_argument("--num_paths_to_collect", type=int, default=DEFAULT_ARGS["num_paths_to_collect"])
     parser.add_argument("--max_path_len", type=int, default=DEFAULT_ARGS["max_path_len"])
     parser.add_argument("--prevent_loops", type=int, choices=[0, 1], default=DEFAULT_ARGS["prevent_loops"])
@@ -199,7 +200,15 @@ def main():
     args = parser.parse_args()
 
     data_root = Path(args.data_root).resolve()
-    expt_root = Path(args.expt_root).resolve()
+    # determine expt_root: prefer explicit arg, else SPARSEKGC_OUTPUT_DIR/probcbr, else default
+    if args.expt_root:
+        expt_root = Path(args.expt_root).resolve()
+    else:
+        sp_out = os.environ.get("SPARSEKGC_OUTPUT_DIR")
+        if sp_out:
+            expt_root = Path(sp_out) / "probcbr"
+        else:
+            expt_root = Path("prob-cbr-expts").resolve()
     ensure_data(data_root, args.datasets, dry_run=args.dry_run)
 
     for dataset in args.datasets:

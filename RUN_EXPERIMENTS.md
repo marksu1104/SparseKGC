@@ -72,7 +72,7 @@ Dataset,Model,MRR,Hits@1,Hits@3,Hits@10,seconds
 Final metric logs use:
 
 ```text
-FINAL_EVAL_METRICS baseline=<baseline> model=<model> dataset=<dataset> split=holdout mrr=<...> h1=<...> h3=<...> h10=<...>
+FINAL_EVAL_METRICS baseline=<baseline> model=<model> dataset=<dataset> split=test mrr=<...> h1=<...> h3=<...> h10=<...>
 ```
 
 ## Model Scope

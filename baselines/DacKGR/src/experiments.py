@@ -15,10 +15,7 @@ import numpy as np
 import os, sys
 import random
 import csv
-<<<<<<< HEAD
 import time
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 import torch
 
 from src.parse_args import parser
@@ -283,23 +280,35 @@ def train(lf):
         lf.load_checkpoint(args.checkpoint_path)
     lf.run_train(train_data, dev_data)
 
-<<<<<<< HEAD
 
-def log_final_metrics(metrics, dataset, model, split_label='holdout'):
+METRICS_CSV_HEADER = [
+    "Dataset", "Model",
+    "MRR_Tail", "MRR_Head", "MRR_Avg",
+    "Hits@1_Tail", "Hits@1_Head", "Hits@1_Avg",
+    "Hits@3_Tail", "Hits@3_Head", "Hits@3_Avg",
+    "Hits@10_Tail", "Hits@10_Head", "Hits@10_Avg",
+    "seconds",
+]
+
+
+def log_final_metrics(tail_metrics, head_metrics, avg_metrics, dataset, model, split_label='test'):
+    # metrics tuples are (hits@1, hits@3, hits@5, hits@10, mrr)
     print(
-        'FINAL_EVAL_METRICS baseline=DacKGR model={} dataset={} split={} mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}'.format(
-            model,
-            dataset,
-            split_label,
-            metrics[4],
-            metrics[0],
-            metrics[1],
-            metrics[3],
+        'FINAL_EVAL_METRICS baseline=DacKGR model={} dataset={} split={} '
+        'mrr_tail={:.5f} mrr_head={:.5f} mrr_avg={:.5f} '
+        'h1_tail={:.5f} h1_head={:.5f} h1_avg={:.5f} '
+        'h3_tail={:.5f} h3_head={:.5f} h3_avg={:.5f} '
+        'h10_tail={:.5f} h10_head={:.5f} h10_avg={:.5f}'.format(
+            model, dataset, split_label,
+            tail_metrics[4], head_metrics[4], avg_metrics[4],
+            tail_metrics[0], head_metrics[0], avg_metrics[0],
+            tail_metrics[1], head_metrics[1], avg_metrics[1],
+            tail_metrics[3], head_metrics[3], avg_metrics[3],
         )
     )
 
 
-def append_metrics_csv(dataset, model, metrics, seconds):
+def append_metrics_csv(dataset, model, tail_metrics, head_metrics, avg_metrics, seconds):
     if os.environ.get("DACKGR_WRITE_METRICS", "1") == "0":
         return
     output_root = os.environ.get("SPARSEKGC_OUTPUT_DIR")
@@ -313,21 +322,18 @@ def append_metrics_csv(dataset, model, metrics, seconds):
     with open(path, "a", newline="") as f:
         writer = csv.writer(f)
         if write_header:
-            writer.writerow(["Dataset", "Model", "MRR", "Hits@1", "Hits@3", "Hits@10", "seconds"])
+            writer.writerow(METRICS_CSV_HEADER)
         writer.writerow([
             dataset,
             model,
-            f"{metrics[4]:.5f}",
-            f"{metrics[0]:.5f}",
-            f"{metrics[1]:.5f}",
-            f"{metrics[3]:.5f}",
+            f"{tail_metrics[4]:.5f}", f"{head_metrics[4]:.5f}", f"{avg_metrics[4]:.5f}",
+            f"{tail_metrics[0]:.5f}", f"{head_metrics[0]:.5f}", f"{avg_metrics[0]:.5f}",
+            f"{tail_metrics[1]:.5f}", f"{head_metrics[1]:.5f}", f"{avg_metrics[1]:.5f}",
+            f"{tail_metrics[3]:.5f}", f"{head_metrics[3]:.5f}", f"{avg_metrics[3]:.5f}",
             f"{seconds:.3f}",
         ])
 
 def inference(lf, seconds=None):
-=======
-def inference(lf):
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
     lf.batch_size = args.dev_batch_size
     lf.eval()
     if args.model == 'hypere':
@@ -426,24 +432,32 @@ def inference(lf):
         # eval_metrics['dev']['hits_at_10'] = dev_metrics[3]
         # eval_metrics['dev']['mrr'] = dev_metrics[4]
         # src.eval.hits_and_ranks(dev_data, pred_scores, lf.kg.all_objects, verbose=True)
-<<<<<<< HEAD
-        print('Final evaluation metrics:')
+        print('Final evaluation metrics (tail prediction):')
         pred_scores = lf.forward(test_data, verbose=False)
-        test_metrics = src.eval.hits_and_ranks(test_data, pred_scores, lf.kg.all_objects, verbose=True, output=False, kg=lf.kg, model_name=args.model, split_relation=False)
-        log_final_metrics(test_metrics, os.path.basename(args.data_dir), args.model)
+        tail_metrics = src.eval.hits_and_ranks(test_data, pred_scores, lf.kg.all_objects, verbose=True, output=False, kg=lf.kg, model_name=args.model, split_relation=False)
+
+        print('Final evaluation metrics (head prediction):')
+        test_data_inv = [(e2, e1, lf.kg.get_inv_relation_id(r)) for (e1, e2, r) in test_data]
+        pred_scores_inv = lf.forward(test_data_inv, verbose=False)
+        head_metrics = src.eval.hits_and_ranks(test_data_inv, pred_scores_inv, lf.kg.all_objects, verbose=True, output=False, kg=lf.kg, model_name=args.model, split_relation=False)
+
+        avg_metrics = tuple((t + h) / 2 for t, h in zip(tail_metrics, head_metrics))
+        print('Bidirectional (head+tail)/2: Hits@1={:.5f} Hits@3={:.5f} Hits@5={:.5f} Hits@10={:.5f} MRR={:.5f}'.format(*avg_metrics))
+        print('MRR: Tail : {:.5f}, Head : {:.5f}, Avg : {:.5f}'.format(tail_metrics[4], head_metrics[4], avg_metrics[4]))
+        for k, idx in ((1, 0), (3, 1), (10, 3)):
+            print('Hits@{}: Tail : {:.5f}, Head : {:.5f}, Avg : {:.5f}'.format(
+                k, tail_metrics[idx], head_metrics[idx], avg_metrics[idx]))
+        log_final_metrics(tail_metrics, head_metrics, avg_metrics, os.path.basename(args.data_dir), args.model)
         if seconds is not None:
-            append_metrics_csv(os.path.basename(args.data_dir), args.model, test_metrics, seconds)
-=======
-        print('Test set performance:')
-        pred_scores = lf.forward(test_data, verbose=False)
-        test_metrics = src.eval.hits_and_ranks(test_data, pred_scores, lf.kg.all_objects, verbose=True, output=False, kg=lf.kg, model_name=args.model, split_relation=False)
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
+            append_metrics_csv(os.path.basename(args.data_dir), args.model, tail_metrics, head_metrics, avg_metrics, seconds)
+            print('RUNTIME_STD baseline=DacKGR model={} dataset={} seconds={:.3f}'.format(
+                args.model, os.path.basename(args.data_dir), seconds))
         eval_metrics['dev'] = {}
-        eval_metrics['dev']['hits_at_1'] = test_metrics[0]
-        eval_metrics['dev']['hits_at_3'] = test_metrics[1]
-        eval_metrics['dev']['hits_at_5'] = test_metrics[2]
-        eval_metrics['dev']['hits_at_10'] = test_metrics[3]
-        eval_metrics['dev']['mrr'] = test_metrics[4]
+        eval_metrics['dev']['hits_at_1'] = avg_metrics[0]
+        eval_metrics['dev']['hits_at_3'] = avg_metrics[1]
+        eval_metrics['dev']['hits_at_5'] = avg_metrics[2]
+        eval_metrics['dev']['hits_at_10'] = avg_metrics[3]
+        eval_metrics['dev']['mrr'] = avg_metrics[4]
         # num = 0; hits_10 = 0.0; hits_1 = 0.0; hits_3 = 0.0; hits_5 = 0.0
         # for x in test_data:
         #     print('Test set of relation {} performance:'.format(x))
@@ -714,21 +728,6 @@ def export_error_cases(lf):
     # 正確做法：直接使用已載入於 knowledge_graph 的 id2entity / id2relation（由 load_index 產生，索引即內部連續 id）。
     id2ent, id2rel = lf.kg.id2entity, lf.kg.id2relation
 
-    # Dev
-    print('Dev set performance:')
-    pred_scores = lf.forward(dev_data, verbose=False)
-    src.eval.hits_and_ranks(dev_data, pred_scores, lf.kg.dev_objects, verbose=True, kg=lf.kg)
-    src.eval.export_error_cases(dev_data, pred_scores, lf.kg.dev_objects, os.path.join(lf.model_dir, 'dev_error_cases.pkl'))
-    _export_error_cases_csv('dev', dev_data, pred_scores, lf.kg.dev_objects, id2ent, id2rel,
-                            os.path.join(lf.model_dir, 'dev_error_cases.csv'), topk=10)
-
-    # Train
-    print('Train set performance:')
-    pred_scores = lf.forward(train_data, verbose=False)
-    src.eval.hits_and_ranks(train_data, pred_scores, lf.kg.train_objects, verbose=True, kg=lf.kg)
-    src.eval.export_error_cases(train_data, pred_scores, lf.kg.train_objects, os.path.join(lf.model_dir, 'train_error_cases.pkl'))
-    _export_error_cases_csv('train', train_data, pred_scores, lf.kg.train_objects, id2ent, id2rel,
-                            os.path.join(lf.model_dir, 'train_error_cases.csv'), topk=10)
 
     print('Test set performance:')
     pred_scores = lf.forward(test_data, verbose=False)
@@ -988,24 +987,16 @@ def run_experiment(args):
             elif args.run_ablation_studies:
                 run_ablation_studies(args)
             else:
-<<<<<<< HEAD
                 run_start = time.perf_counter()
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
                 initialize_model_directory(args)
                 lf = construct_model(args)
                 lf.cuda()
 
                 if args.train:
                     train(lf)
-<<<<<<< HEAD
                     inference(lf, seconds=time.perf_counter() - run_start)
                 elif args.inference:
                     inference(lf, seconds=time.perf_counter() - run_start)
-=======
-                elif args.inference:
-                    inference(lf)
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
                 elif args.eval_by_relation_type:
                     inference(lf)
                 elif args.eval_by_seen_queries:

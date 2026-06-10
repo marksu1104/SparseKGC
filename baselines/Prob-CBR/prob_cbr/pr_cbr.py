@@ -1,13 +1,8 @@
 import argparse
-<<<<<<< HEAD
 import csv
 import numpy as np
 import os
 import time
-=======
-import numpy as np
-import os
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 from tqdm import tqdm
 from collections import defaultdict
 import pickle
@@ -21,17 +16,22 @@ from typing import *
 import logging
 import json
 import sys
-<<<<<<< HEAD
 try:
     import wandb
 except ImportError:
     wandb = None
-=======
-import wandb
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 
 logger = logging.getLogger('main')
 logger.setLevel(logging.INFO)
+
+METRICS_CSV_HEADER = [
+    "Dataset", "Model",
+    "MRR_Tail", "MRR_Head", "MRR_Avg",
+    "Hits@1_Tail", "Hits@1_Head", "Hits@1_Avg",
+    "Hits@3_Tail", "Hits@3_Head", "Hits@3_Avg",
+    "Hits@10_Tail", "Hits@10_Head", "Hits@10_Avg",
+    "seconds",
+]
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 formatter = logging.Formatter("[%(asctime)s \t %(message)s]",
@@ -320,7 +320,7 @@ class ProbCBR(object):
                 all_acc.append(0.0)
         return all_acc
 
-    def do_symbolic_case_based_reasoning(self):
+    def do_symbolic_case_based_reasoning(self, eval_map=None):
         num_programs = []
         num_answers = []
         all_acc = []
@@ -330,7 +330,8 @@ class ProbCBR(object):
         per_relation_query_count = {}
         total_examples = 0
         learnt_programs = defaultdict(lambda: defaultdict(int))  # for each query relation, a map of programs to count
-        for ex_ctr, ((e1, r), e2_list) in enumerate(tqdm(self.eval_map.items())):
+        _eval_map = eval_map if eval_map is not None else self.eval_map
+        for ex_ctr, ((e1, r), e2_list) in enumerate(tqdm(_eval_map.items())):
             # if e2_list is in train list then remove them
             # Normally, this shouldnt happen at all, but this happens for Nell-995.
             orig_train_e2_list = self.train_map[(e1, r)]
@@ -453,43 +454,6 @@ class ProbCBR(object):
         logger.info("Hits@5 {}".format(hits_5 / total_examples))
         logger.info("Hits@10 {}".format(hits_10 / total_examples))
         logger.info("MRR {}".format(mrr / total_examples))
-<<<<<<< HEAD
-        split_label = "holdout" if args.test else "dev"
-        logger.info(
-            "FINAL_EVAL_METRICS baseline=Prob-CBR model=Prob-CBR dataset={} split={} mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}".format(
-                args.dataset_name,
-                split_label,
-                mrr / total_examples,
-                hits_1 / total_examples,
-                hits_3 / total_examples,
-                hits_10 / total_examples,
-            )
-        )
-        if hasattr(args, "_run_start_time"):
-            seconds = time.perf_counter() - args._run_start_time
-            output_root = os.environ.get("SPARSEKGC_OUTPUT_DIR")
-            if output_root:
-                timing_dir = output_root
-            else:
-                timing_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "timings")
-            os.makedirs(timing_dir, exist_ok=True)
-            path = os.path.join(timing_dir, "probcbr_metrics.csv")
-            write_header = not os.path.exists(path)
-            with open(path, "a", newline="") as f:
-                writer = csv.writer(f)
-                if write_header:
-                    writer.writerow(["Dataset", "Model", "MRR", "Hits@1", "Hits@3", "Hits@10", "seconds"])
-                writer.writerow([
-                    args.dataset_name,
-                    "Prob-CBR",
-                    f"{mrr / total_examples:.5f}",
-                    f"{hits_1 / total_examples:.5f}",
-                    f"{hits_3 / total_examples:.5f}",
-                    f"{hits_10 / total_examples:.5f}",
-                    f"{seconds:.3f}",
-                ])
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         logger.info("Avg number of nn, that do not have the query relation: {}".format(
             np.mean(self.all_zero_ctr)))
         logger.info("Avg num of returned nearest neighbors: {:2.4f}".format(np.mean(self.all_num_ret_nn)))
@@ -510,6 +474,7 @@ class ProbCBR(object):
                        'all_zero_ctr': self.all_zero_ctr, 'avg_num_nn': np.mean(self.all_num_ret_nn),
                        'avg_num_prog': np.mean(num_programs), 'avg_num_ans': np.mean(num_answers),
                        'avg_num_failed_prog': np.mean(self.num_non_executable_programs), 'acc_loose': np.mean(all_acc)})
+        return hits_1, hits_3, hits_5, hits_10, mrr, total_examples
 
     def calc_precision_map(self, output_filenm=""):
         """
@@ -618,10 +583,8 @@ class ProbCBR(object):
 
 
 def main(args):
-<<<<<<< HEAD
+    # Record start time for optional metrics timing
     args._run_start_time = time.perf_counter()
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
     dataset_name = args.dataset_name
     logger.info("==========={}============".format(dataset_name))
     data_dir = os.path.join(args.data_dir, "data", dataset_name)
@@ -640,11 +603,7 @@ def main(args):
     args.train_file = os.path.join(data_dir, "graph.txt") if dataset_name == "nell" else os.path.join(data_dir,
                                                                                                       "train.txt")
 
-<<<<<<< HEAD
     if args.subgraph_file_name == "":
-=======
-    if args.subgraph_file_name is "":
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         args.subgraph_file_name = f"paths_{args.num_paths_to_collect}_{args.max_path_len}hop"
         if args.prevent_loops:
             args.subgraph_file_name += "_no_loops"
@@ -718,6 +677,15 @@ def main(args):
 
     logger.info("Loading combined train/dev/test map for filtered eval")
     all_kg_map = load_data_all_triples(args.train_file, args.dev_file, os.path.join(data_dir, 'test.txt'))
+    # Add inverse entries so filtered eval works correctly for head prediction
+    inv_entries = defaultdict(list)
+    for (e1, r), e2_list in all_kg_map.items():
+        r_inv = get_inv_relation(r, dataset_name)
+        for e2 in e2_list:
+            if e1 not in inv_entries[(e2, r_inv)]:
+                inv_entries[(e2, r_inv)].append(e1)
+    for k, v in inv_entries.items():
+        all_kg_map[k].extend(v)
     args.all_kg_map = all_kg_map
 
     prob_cbr_agent = ProbCBR(args, train_map, eval_map, entity_vocab, rev_entity_vocab, rel_vocab,
@@ -800,14 +768,88 @@ def main(args):
     args.cluster_assignments = cluster_assignments_bck
 
     if not args.only_preprocess:
-        prob_cbr_agent.do_symbolic_case_based_reasoning()
+        # Tail prediction
+        logger.info("Running tail prediction (original direction)...")
+        t_h1, t_h3, t_h5, t_h10, t_mrr, t_total = prob_cbr_agent.do_symbolic_case_based_reasoning()
+
+        # Head prediction via inverse queries
+        logger.info("Running head prediction (inverse direction)...")
+        inv_eval_map = defaultdict(list)
+        src_map = test_map if args.test else dev_map
+        for (e1, r), e2_list in src_map.items():
+            r_inv = get_inv_relation(r, dataset_name)
+            for e2 in e2_list:
+                if e1 not in inv_eval_map[(e2, r_inv)]:
+                    inv_eval_map[(e2, r_inv)].append(e1)
+        h_h1, h_h3, h_h5, h_h10, h_mrr, h_total = prob_cbr_agent.do_symbolic_case_based_reasoning(inv_eval_map)
+
+        # Average bidirectional metrics
+        total = t_total + h_total
+        avg_mrr  = (t_mrr  + h_mrr)  / total
+        avg_h1   = (t_h1   + h_h1)   / total
+        avg_h3   = (t_h3   + h_h3)   / total
+        avg_h5   = (t_h5   + h_h5)   / total
+        avg_h10  = (t_h10  + h_h10)  / total
+
+        split_label = "test" if args.test else "dev"
+        logger.info("Bidirectional (head+tail)/2:")
+        logger.info("Hits@1 {:.5f}".format(avg_h1))
+        logger.info("Hits@3 {:.5f}".format(avg_h3))
+        logger.info("Hits@5 {:.5f}".format(avg_h5))
+        logger.info("Hits@10 {:.5f}".format(avg_h10))
+        logger.info("MRR {:.5f}".format(avg_mrr))
+
+        tail_mrr, head_mrr = t_mrr / t_total, h_mrr / h_total
+        tail_h1, head_h1 = t_h1 / t_total, h_h1 / h_total
+        tail_h3, head_h3 = t_h3 / t_total, h_h3 / h_total
+        tail_h10, head_h10 = t_h10 / t_total, h_h10 / h_total
+        logger.info("MRR: Tail : {:.5f}, Head : {:.5f}, Avg : {:.5f}".format(tail_mrr, head_mrr, avg_mrr))
+        logger.info("Hits@1: Tail : {:.5f}, Head : {:.5f}, Avg : {:.5f}".format(tail_h1, head_h1, avg_h1))
+        logger.info("Hits@3: Tail : {:.5f}, Head : {:.5f}, Avg : {:.5f}".format(tail_h3, head_h3, avg_h3))
+        logger.info("Hits@10: Tail : {:.5f}, Head : {:.5f}, Avg : {:.5f}".format(tail_h10, head_h10, avg_h10))
+
+        logger.info(
+            "FINAL_EVAL_METRICS baseline=Prob-CBR model=Prob-CBR dataset={} split={} "
+            "mrr_tail={:.5f} mrr_head={:.5f} mrr_avg={:.5f} "
+            "h1_tail={:.5f} h1_head={:.5f} h1_avg={:.5f} "
+            "h3_tail={:.5f} h3_head={:.5f} h3_avg={:.5f} "
+            "h10_tail={:.5f} h10_head={:.5f} h10_avg={:.5f}".format(
+                args.dataset_name, split_label,
+                tail_mrr, head_mrr, avg_mrr,
+                tail_h1, head_h1, avg_h1,
+                tail_h3, head_h3, avg_h3,
+                tail_h10, head_h10, avg_h10,
+            )
+        )
+        if hasattr(args, "_run_start_time"):
+            seconds = time.perf_counter() - args._run_start_time
+            logger.info("RUNTIME_STD baseline=Prob-CBR model=Prob-CBR dataset={} seconds={:.3f}".format(
+                args.dataset_name, seconds))
+            output_root = os.environ.get("SPARSEKGC_OUTPUT_DIR")
+            timing_dir = output_root if output_root else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "timings")
+            os.makedirs(timing_dir, exist_ok=True)
+            path = os.path.join(timing_dir, "probcbr_metrics.csv")
+            write_header = not os.path.exists(path)
+            with open(path, "a", newline="") as f:
+                writer = csv.writer(f)
+                if write_header:
+                    writer.writerow(METRICS_CSV_HEADER)
+                writer.writerow([
+                    args.dataset_name, "Prob-CBR",
+                    f"{tail_mrr:.5f}", f"{head_mrr:.5f}", f"{avg_mrr:.5f}",
+                    f"{tail_h1:.5f}", f"{head_h1:.5f}", f"{avg_h1:.5f}",
+                    f"{tail_h3:.5f}", f"{head_h3:.5f}", f"{avg_h3:.5f}",
+                    f"{tail_h10:.5f}", f"{head_h10:.5f}", f"{avg_h10:.5f}",
+                    f"{seconds:.3f}",
+                ])
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Collect subgraphs around entities")
     parser.add_argument("--dataset_name", type=str, default="nell")
     parser.add_argument("--data_dir", type=str, default="../prob_cbr_data/")
-    parser.add_argument("--expt_dir", type=str, default="../prob_cbr_expts/")
+    # prefer SPARSEKGC_OUTPUT_DIR/probcbr when env set and caller doesn't provide --expt_dir
+    parser.add_argument("--expt_dir", type=str, default=None)
     parser.add_argument("--subgraph_file_name", type=str, default="")
     parser.add_argument("--small", action="store_true")
     parser.add_argument("--test", action="store_true")
@@ -835,13 +877,17 @@ if __name__ == '__main__':
     parser.add_argument("--prevent_loops", type=int, choices=[0, 1], default=1)
 
     args = parser.parse_args()
+    # resolve expt_dir: if not provided, prefer SPARSEKGC_OUTPUT_DIR/probcbr
+    if args.expt_dir is None:
+        sp_out = os.environ.get("SPARSEKGC_OUTPUT_DIR")
+        if sp_out:
+            args.expt_dir = os.path.join(sp_out, "probcbr")
+        else:
+            args.expt_dir = "../prob_cbr_expts/"
     logger.info('COMMAND: %s' % ' '.join(sys.argv))
     if args.use_wandb:
-<<<<<<< HEAD
         if wandb is None:
             raise ImportError("wandb is required when --use_wandb 1")
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         wandb.init(project='pr-cbr')
 
     if args.name_of_run == "unset":

@@ -20,6 +20,7 @@ DATASETS = [
 ]
 
 BASE_DIR = Path(__file__).resolve().parent
+DATA_ROOT = BASE_DIR / "datasets"
 
 OUTPUT_DIR = BASE_DIR / "outputs"
 
@@ -80,9 +81,12 @@ def python_bin() -> str:
 
 def run_command(cmd, cwd, dry_run=False, log_file=None, summary_context=None, env_overrides=None, show_summary=True, heartbeat_label=None):
     if dry_run:
+        rendered = shlex.join([str(x) for x in cmd])
+        log_status(f"Dry-run | cwd={cwd} | cmd={rendered}")
         return
     env = os.environ.copy()
     env["SPARSEKGC_OUTPUT_DIR"] = str(OUTPUT_DIR)
+    env.setdefault("SPARSEKGC_DATA_DIR", str(DATA_ROOT))
     if env_overrides:
         env.update(env_overrides)
     if log_file is None:
@@ -128,7 +132,7 @@ def run_command(cmd, cwd, dry_run=False, log_file=None, summary_context=None, en
                 line = raw_line.strip()
                 if "Dev MRR" in line or "Dev set performance" in line:
                     valid_line = line
-                if line.startswith("FINAL_EVAL_METRICS"):
+                if "FINAL_EVAL_METRICS" in line:
                     final_line = line
                 if line.startswith("RUNTIME_STD") and "seconds=" in line:
                     runtime_seconds = line.rsplit("seconds=", 1)[-1]
@@ -138,7 +142,7 @@ def run_command(cmd, cwd, dry_run=False, log_file=None, summary_context=None, en
         print(f"Time   | {timestamp()}", flush=True)
         print(f"Result | {prefix}", flush=True)
         print(f"  valid  : {valid_line or 'not_found'}", flush=True)
-        print(f"  holdout: {final_line or 'not_found'}", flush=True)
+        print(f"  test   : {final_line or 'not_found'}", flush=True)
         print(f"  seconds: {runtime_seconds or 'not_found'}", flush=True)
         print(f"  log    : {log_file}", flush=True)
         print("-" * 72, flush=True)
@@ -187,11 +191,13 @@ def run_hogrn(args):
 
 def run_dackgr(args):
     cwd = BASE_DIR / "baselines" / "DacKGR"
-    stages = [
+    all_stages = [
         ("process_data", "point", "./experiment.sh", DACKGR_PROCESS_CONFIGS, "--process_data", {"DACKGR_WRITE_METRICS": "0"}),
         ("pretrain_conve", "conve", "./experiment-emb.sh", DACKGR_CONVE_CONFIGS, "--train", {"DACKGR_WRITE_METRICS": "0"}),
         ("train_infer", "point.rs.conve", "./experiment-rs.sh", DACKGR_RS_CONFIGS, "--train", {"DACKGR_WRITE_METRICS": "1"}),
     ]
+    enabled_stages = set(args.dackgr_stages or ["process_data", "pretrain_conve", "train_infer"])
+    stages = [s for s in all_stages if s[0] in enabled_stages]
     for dataset in args.datasets:
         for stage, model, script, config_map, action, env_overrides in stages:
             config = config_map.get(dataset)
@@ -222,13 +228,22 @@ def run_dackgr(args):
 
 
 def run_probcbr(args):
+    data_root = args.probcbr_data_root or str((BASE_DIR / "baselines" / "Prob-CBR" / "prob-cbr-data").resolve())
+    expt_root = args.probcbr_expt_root or str((OUTPUT_DIR / "probcbr").resolve())
     cmd = [
         python_bin(),
         "run_all.py",
         "--datasets",
         *args.datasets,
-        "--test",
+        "--data_root",
+        data_root,
+        "--expt_root",
+        expt_root,
     ]
+    if not args.probcbr_no_test and not args.probcbr_only_preprocess:
+        cmd.append("--test")
+    if args.probcbr_only_preprocess:
+        cmd.append("--only_preprocess")
     if args.dry_run:
         cmd.append("--dry_run")
     run_command(cmd, BASE_DIR / "baselines" / "Prob-CBR")
@@ -243,10 +258,19 @@ def main():
     parser.add_argument("--reset_metrics", action="store_true")
     parser.add_argument("--models", nargs="+", help="Traditional-only model list.")
     parser.add_argument("--max_epochs", type=int, help="Traditional-only epoch override.")
+    parser.add_argument("--dackgr_stages", nargs="+", choices=["process_data", "pretrain_conve", "train_infer"],
+                        help="DacKGR-only: run only selected stages (default: all three stages).")
+    parser.add_argument("--probcbr_data_root", help="Prob-CBR-only: root path to prob-cbr-data.")
+    parser.add_argument("--probcbr_expt_root", help="Prob-CBR-only: root path for Prob-CBR experiment outputs.")
+    parser.add_argument("--probcbr_only_preprocess", action="store_true",
+                        help="Prob-CBR-only: build caches/maps without running final symbolic eval.")
+    parser.add_argument("--probcbr_no_test", action="store_true",
+                        help="Prob-CBR-only: do not pass --test (evaluate dev split if evaluation runs).")
     args = parser.parse_args()
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     os.environ["SPARSEKGC_OUTPUT_DIR"] = str(OUTPUT_DIR)
+    os.environ.setdefault("SPARSEKGC_DATA_DIR", str(DATA_ROOT))
 
     if args.reset_metrics:
         reset_metrics(args.baseline)

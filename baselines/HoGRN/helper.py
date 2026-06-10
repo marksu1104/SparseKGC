@@ -25,21 +25,35 @@ def get_logger(name, log_dir, config_dir):
 	"""
 	Creates a logger object
 	"""
-<<<<<<< HEAD
 	os.makedirs(log_dir, exist_ok=True)
-	config_dict = json.load(open( config_dir + 'log_config.json'))
-	config_dict['handlers']['file_handler']['filename'] = os.path.join(log_dir, name.replace('/', '-'))
-=======
-	config_dict = json.load(open( config_dir + 'log_config.json'))
-	config_dict['handlers']['file_handler']['filename'] = log_dir + name.replace('/', '-')
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
-	logging.config.dictConfig(config_dict)
-	logger = logging.getLogger(name)
+	cfg_path = os.path.join(config_dir, 'log_config.json')
+	if os.path.exists(cfg_path):
+		try:
+			config_dict = json.load(open(cfg_path))
+			config_dict['handlers']['file_handler']['filename'] = os.path.join(log_dir, name.replace('/', '-') + '.log')
+			logging.config.dictConfig(config_dict)
+			logger = logging.getLogger(name)
+		except Exception:
+			# fallback to basic logger on any error
+			logger = logging.getLogger(name)
+			logger.setLevel(logging.INFO)
+	else:
+		logger = logging.getLogger(name)
+		logger.setLevel(logging.INFO)
 
-	std_out_format = '%(asctime)s - [%(levelname)s] - %(message)s'
-	consoleHandler = logging.StreamHandler(sys.stdout)
-	consoleHandler.setFormatter(logging.Formatter(std_out_format))
-	logger.addHandler(consoleHandler)
+	# ensure a stream handler is present
+	if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+		std_out_format = '%(asctime)s - [%(levelname)s] - %(message)s'
+		consoleHandler = logging.StreamHandler(sys.stdout)
+		consoleHandler.setFormatter(logging.Formatter(std_out_format))
+		logger.addHandler(consoleHandler)
+
+	# ensure a file handler writing to log_dir exists
+	if not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
+		fh_path = os.path.join(log_dir, name.replace('/', '-') + '.log')
+		fileHandler = logging.FileHandler(fh_path)
+		fileHandler.setFormatter(logging.Formatter('%(asctime)s - [%(levelname)s] - %(message)s'))
+		logger.addHandler(fileHandler)
 
 	return logger
 

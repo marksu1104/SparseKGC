@@ -7,14 +7,10 @@ import time
 import pickle
 import argparse
 import json
-<<<<<<< HEAD
 try:
     import wandb
 except ImportError:
     wandb = None
-=======
-import wandb
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
 import logging
 
 logger = logging.getLogger('get_paths')
@@ -110,11 +106,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.use_wandb:
-<<<<<<< HEAD
         if wandb is None:
             raise ImportError("wandb is required when --use_wandb 1")
-=======
->>>>>>> 39bcf0d3ffe720aac1329c1ab0ffaf4df7a52c4f
         wandb.init(project='collect-paths')
 
     main(args)

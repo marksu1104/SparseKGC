@@ -219,12 +219,16 @@ class Runner(object):
 			for k in range(10):
 				self.logger.info('Hit@{}: Tail : {:.5}, Head : {:.5}, Avg : {:.5}'.format(k+1, results['left_hits@{}'.format(k+1)], results['right_hits@{}'.format(k+1)], results['hits@{}'.format(k+1)]))
 		self.logger.info(
-			'EVAL_STD model=HoGRN split={} dir=avg filtered=1 tie_aware=1 full_entity=1 mrr={:.5f} h1={:.5f} h3={:.5f} h10={:.5f}'.format(
+			'EVAL_STD model=HoGRN split={} filtered=1 tie_aware=1 full_entity=1 '
+			'mrr_tail={:.5f} mrr_head={:.5f} mrr_avg={:.5f} '
+			'h1_tail={:.5f} h1_head={:.5f} h1_avg={:.5f} '
+			'h3_tail={:.5f} h3_head={:.5f} h3_avg={:.5f} '
+			'h10_tail={:.5f} h10_head={:.5f} h10_avg={:.5f}'.format(
 				split,
-				results['mrr'],
-				results['hits@1'],
-				results['hits@3'],
-				results['hits@10']
+				results['left_mrr'], results['right_mrr'], results['mrr'],
+				results['left_hits@1'], results['right_hits@1'], results['hits@1'],
+				results['left_hits@3'], results['right_hits@3'], results['hits@3'],
+				results['left_hits@10'], results['right_hits@10'], results['hits@10'],
 			)
 		)
 		return results

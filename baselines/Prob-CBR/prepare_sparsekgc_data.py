@@ -1,6 +1,7 @@
 import argparse
 import shutil
 from pathlib import Path
+from prob_cbr.data.data_utils import get_inv_relation
 
 DATASETS = [
     "WD-singer",
@@ -24,6 +25,20 @@ def convert_file(src, dst):
             fout.write(f"{head}\t{relation}\t{tail}\n")
 
 
+def convert_file_with_inverse(src, dst, dataset):
+    """Write original + inverse edges so CBR can traverse the graph bidirectionally."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    with src.open("r", encoding="utf-8") as fin, dst.open("w", encoding="utf-8") as fout:
+        for line in fin:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 3:
+                continue
+            head, tail, relation = parts[:3]
+            fout.write(f"{head}\t{relation}\t{tail}\n")
+            r_inv = get_inv_relation(relation, dataset)
+            fout.write(f"{tail}\t{r_inv}\t{head}\n")
+
+
 def prepare_dataset(source_root, output_root, dataset):
     src_dir = source_root / dataset
     if not src_dir.exists():
@@ -35,7 +50,7 @@ def prepare_dataset(source_root, output_root, dataset):
     subgraph_dir.mkdir(parents=True, exist_ok=True)
 
     convert_file(src_dir / "train.txt", data_dir / "train.txt")
-    convert_file(src_dir / "train.txt", data_dir / "graph.txt")
+    convert_file_with_inverse(src_dir / "train.txt", data_dir / "graph.txt", dataset)
     convert_file(src_dir / "valid.txt", data_dir / "dev.txt")
     convert_file(src_dir / "test.txt", data_dir / "test.txt")
 
