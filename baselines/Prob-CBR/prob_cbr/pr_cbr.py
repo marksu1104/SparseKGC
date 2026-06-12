@@ -24,14 +24,8 @@ except ImportError:
 logger = logging.getLogger('main')
 logger.setLevel(logging.INFO)
 
-METRICS_CSV_HEADER = [
-    "Dataset", "Model",
-    "MRR_Tail", "MRR_Head", "MRR_Avg",
-    "Hits@1_Tail", "Hits@1_Head", "Hits@1_Avg",
-    "Hits@3_Tail", "Hits@3_Head", "Hits@3_Avg",
-    "Hits@10_Tail", "Hits@10_Head", "Hits@10_Avg",
-    "seconds",
-]
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "scripts"))
+from metrics_csv import upsert_metrics_csv, METRICS_CSV_HEADER
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 formatter = logging.Formatter("[%(asctime)s \t %(message)s]",
@@ -829,19 +823,14 @@ def main(args):
             timing_dir = output_root if output_root else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "timings")
             os.makedirs(timing_dir, exist_ok=True)
             path = os.path.join(timing_dir, "probcbr_metrics.csv")
-            write_header = not os.path.exists(path)
-            with open(path, "a", newline="") as f:
-                writer = csv.writer(f)
-                if write_header:
-                    writer.writerow(METRICS_CSV_HEADER)
-                writer.writerow([
-                    args.dataset_name, "Prob-CBR",
-                    f"{tail_mrr:.5f}", f"{head_mrr:.5f}", f"{avg_mrr:.5f}",
-                    f"{tail_h1:.5f}", f"{head_h1:.5f}", f"{avg_h1:.5f}",
-                    f"{tail_h3:.5f}", f"{head_h3:.5f}", f"{avg_h3:.5f}",
-                    f"{tail_h10:.5f}", f"{head_h10:.5f}", f"{avg_h10:.5f}",
-                    f"{seconds:.3f}",
-                ])
+            upsert_metrics_csv(path, [
+                args.dataset_name, "Prob-CBR",
+                f"{tail_mrr:.5f}", f"{head_mrr:.5f}", f"{avg_mrr:.5f}",
+                f"{tail_h1:.5f}", f"{head_h1:.5f}", f"{avg_h1:.5f}",
+                f"{tail_h3:.5f}", f"{head_h3:.5f}", f"{avg_h3:.5f}",
+                f"{tail_h10:.5f}", f"{head_h10:.5f}", f"{avg_h10:.5f}",
+                f"{seconds:.3f}",
+            ])
 
 
 if __name__ == '__main__':

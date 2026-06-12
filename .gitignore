@@ -1,3 +1,6 @@
+# Datasets (no longer tracked via git-lfs)
+datasets/
+
 # Baseline artifacts
 baselines/**/checkpoints/
 baselines/**/log/

@@ -8,6 +8,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+from log_format import print_start, print_result
+
 DATASETS = [
     "WD-singer",
     "FB15K-237-10",
@@ -121,14 +124,9 @@ def append_timing(row):
         writer.writerow(row)
 
 
-def run_with_tee(cmd, log_file, dataset, dry_run=False):
+def run_with_tee(cmd, log_file, dataset, dry_run=False, params_str=""):
     command_str = " ".join(shlex.quote(x) for x in cmd)
-    print("=" * 72, flush=True)
-    print(f"Time   | {timestamp()}", flush=True)
-    print(f"Start  | baseline=Prob-CBR | model=Prob-CBR | dataset={dataset}", flush=True)
-    print(f"Params | {command_str}", flush=True)
-    print(f"Log    | {log_file}", flush=True)
-    print("=" * 72, flush=True)
+    print_start(timestamp(), "Prob-CBR", "Prob-CBR", dataset, params_str)
     if dry_run:
         return {"status": "dry_run", "seconds": 0.0, "log_file": str(log_file), "command": command_str}
     log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -168,14 +166,7 @@ def run_with_tee(cmd, log_file, dataset, dry_run=False):
                 line = raw_line.strip().strip("[]")
                 if "FINAL_EVAL_METRICS" in line:
                     final_line = line
-        print("-" * 72, flush=True)
-        print(f"Time   | {timestamp()}", flush=True)
-        print(f"Result | baseline=Prob-CBR | model=Prob-CBR | dataset={dataset}", flush=True)
-        print("  valid  : not_run", flush=True)
-        print(f"  test   : {final_line or 'not_found'}")
-        print(f"  seconds: {seconds:.3f}", flush=True)
-        print(f"  log    : {log_file}", flush=True)
-        print("-" * 72, flush=True)
+        print_result(timestamp(), "Prob-CBR", "Prob-CBR", dataset, log_file, None, final_line, seconds, status)
     if status != "ok":
         raise subprocess.CalledProcessError(process.returncode, cmd)
     return row
@@ -214,7 +205,8 @@ def main():
     for dataset in args.datasets:
         cmd = build_command(dataset, data_root, expt_root, args, test=args.test, only_preprocess=args.only_preprocess)
         log_file = baseline_output_dir() / f"Prob-CBR_{dataset}.log"
-        run_with_tee(cmd, log_file, dataset, dry_run=args.dry_run)
+        params_str = " ".join(f"{k}={getattr(args, k)}" for k in DEFAULT_ARGS)
+        run_with_tee(cmd, log_file, dataset, dry_run=args.dry_run, params_str=params_str)
 
 
 if __name__ == "__main__":

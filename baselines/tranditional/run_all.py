@@ -6,6 +6,9 @@ import csv
 import time
 from datetime import datetime
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+from log_format import print_start, print_result
+
 MODELS = ["TransE", "DistMult", "ComplEx", "ConvE", "TuckER", "RotatE"]
 DATASETS = [
     "WD-singer",
@@ -28,6 +31,31 @@ DEFAULT_ARGS = {
     "gpu": 0,
     "patience": 25,
     "eval_freq": 1,
+}
+
+# Per-model literature-common settings (shared across all datasets).
+# Training-budget knobs (max_epochs, emb_dim, patience, eval_freq, gpu) stay
+# unified via DEFAULT_ARGS / CLI args for fair comparison; only the
+# model-specific optimization hyperparameters below are overridden.
+# Sources: Dettmers et al. 2018 ConvE official config (lr=0.003, batch=128),
+#          Balazevic et al. 2019 TuckER official config (lr=0.0005, batch=128).
+# NOTE: ComplEx/TransE/RotatE/ConvE/TuckER use l2=0.0 (not the literature-common
+# 0.01) because this implementation applies l2 as Adam weight_decay directly on
+# the embeddings -- weight_decay=0.01 collapses them to an all-zero degenerate
+# fixed point (loss stuck at ln(2)) within the first epoch.
+# DistMult uses a small l2=1e-5: with l2=0.0 and no other regularization,
+# DistMult on small datasets (e.g. WD-singer) is highly seed-sensitive --
+# training loss can collapse to ~0 within ~6 epochs while valid MRR collapses
+# in the same window, depending on random init (observed MRR range 0.02-0.30
+# across seeds with l2=0.0). l2=1e-5 is 1000x smaller than the collapsing
+# 0.01 and provides enough regularization to avoid the early overfit collapse.
+MODEL_CONFIGS = {
+    "TransE": {"lr": 1e-3, "l2": 0.0, "batch_size": 256},
+    "RotatE": {"lr": 1e-3, "l2": 0.0, "batch_size": 256},
+    "DistMult": {"lr": 1e-3, "l2": 1e-5, "batch_size": 256},
+    "ComplEx": {"lr": 1e-3, "l2": 0.0, "batch_size": 256},
+    "ConvE": {"lr": 0.003, "l2": 0.0, "batch_size": 128},
+    "TuckER": {"lr": 0.0005, "l2": 0.0, "batch_size": 128},
 }
 
 
@@ -58,7 +86,7 @@ def run_with_tee(cmd, log_file):
             raise subprocess.CalledProcessError(process.returncode, cmd)
 
 
-def emit_final_summary(log_file, baseline, model, dataset, seconds):
+def read_result_lines(log_file):
     valid_line = None
     final_line = None
     with open(log_file, "r", errors="replace") as f:
@@ -68,14 +96,7 @@ def emit_final_summary(log_file, baseline, model, dataset, seconds):
                 valid_line = line
             if "FINAL_EVAL_METRICS" in line:
                 final_line = line
-    print("-" * 72, flush=True)
-    print(f"Time   | {timestamp()}", flush=True)
-    print(f"Result | baseline={baseline} | model={model} | dataset={dataset}", flush=True)
-    print(f"  valid  : {valid_line or 'not_found'}")
-    print(f"  test   : {final_line or 'not_found'}")
-    print(f"  seconds: {seconds:.3f}", flush=True)
-    print(f"  log    : {log_file}", flush=True)
-    print("-" * 72, flush=True)
+    return valid_line, final_line
 
 
 def output_root():
@@ -121,6 +142,7 @@ def run_experiment(model, dataset, dry_run=False, **kwargs):
 
     args = DEFAULT_ARGS.copy()
     args.update(kwargs)
+    args.update(MODEL_CONFIGS.get(model, {}))
 
     cmd.extend(["--model", model])
     cmd.extend(["--dataset", dataset])
@@ -131,15 +153,12 @@ def run_experiment(model, dataset, dry_run=False, **kwargs):
 
     if model in {"TransE", "RotatE"}:
         cmd.extend(["--margin", "9.0"])
+        args["margin"] = 9.0
 
     command_str = " ".join(cmd)
     log_file = os.path.join(baseline_output_dir(), f"{model}_{dataset}.log")
-    print("=" * 72, flush=True)
-    print(f"Time   | {timestamp()}", flush=True)
-    print(f"Start  | baseline=traditional | model={model} | dataset={dataset}", flush=True)
-    print(f"Params | {command_str}", flush=True)
-    print(f"Log    | {log_file}", flush=True)
-    print("=" * 72, flush=True)
+    params_str = " ".join(f"{k}={v}" for k, v in args.items() if k != "gpu")
+    print_start(timestamp(), "traditional", model, dataset, params_str)
     if dry_run:
         return {"status": "dry_run", "seconds": 0.0, "log_file": log_file, "command": command_str}
 
@@ -167,7 +186,8 @@ def run_experiment(model, dataset, dry_run=False, **kwargs):
     }
     append_timing(row)
     if status == "ok":
-        emit_final_summary(log_file, "traditional", model, dataset, seconds)
+        valid_line, final_line = read_result_lines(log_file)
+        print_result(timestamp(), "traditional", model, dataset, log_file, valid_line, final_line, seconds, status)
     return row
 
 

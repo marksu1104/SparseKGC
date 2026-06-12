@@ -281,14 +281,8 @@ def train(lf):
     lf.run_train(train_data, dev_data)
 
 
-METRICS_CSV_HEADER = [
-    "Dataset", "Model",
-    "MRR_Tail", "MRR_Head", "MRR_Avg",
-    "Hits@1_Tail", "Hits@1_Head", "Hits@1_Avg",
-    "Hits@3_Tail", "Hits@3_Head", "Hits@3_Avg",
-    "Hits@10_Tail", "Hits@10_Head", "Hits@10_Avg",
-    "seconds",
-]
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "scripts"))
+from metrics_csv import upsert_metrics_csv, METRICS_CSV_HEADER
 
 
 def log_final_metrics(tail_metrics, head_metrics, avg_metrics, dataset, model, split_label='test'):
@@ -318,20 +312,15 @@ def append_metrics_csv(dataset, model, tail_metrics, head_metrics, avg_metrics, 
         timing_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "timings")
     os.makedirs(timing_dir, exist_ok=True)
     path = os.path.join(timing_dir, "dackgr_metrics.csv")
-    write_header = not os.path.exists(path)
-    with open(path, "a", newline="") as f:
-        writer = csv.writer(f)
-        if write_header:
-            writer.writerow(METRICS_CSV_HEADER)
-        writer.writerow([
-            dataset,
-            model,
-            f"{tail_metrics[4]:.5f}", f"{head_metrics[4]:.5f}", f"{avg_metrics[4]:.5f}",
-            f"{tail_metrics[0]:.5f}", f"{head_metrics[0]:.5f}", f"{avg_metrics[0]:.5f}",
-            f"{tail_metrics[1]:.5f}", f"{head_metrics[1]:.5f}", f"{avg_metrics[1]:.5f}",
-            f"{tail_metrics[3]:.5f}", f"{head_metrics[3]:.5f}", f"{avg_metrics[3]:.5f}",
-            f"{seconds:.3f}",
-        ])
+    upsert_metrics_csv(path, [
+        dataset,
+        model,
+        f"{tail_metrics[4]:.5f}", f"{head_metrics[4]:.5f}", f"{avg_metrics[4]:.5f}",
+        f"{tail_metrics[0]:.5f}", f"{head_metrics[0]:.5f}", f"{avg_metrics[0]:.5f}",
+        f"{tail_metrics[1]:.5f}", f"{head_metrics[1]:.5f}", f"{avg_metrics[1]:.5f}",
+        f"{tail_metrics[3]:.5f}", f"{head_metrics[3]:.5f}", f"{avg_metrics[3]:.5f}",
+        f"{seconds:.3f}",
+    ])
 
 def inference(lf, seconds=None):
     lf.batch_size = args.dev_batch_size

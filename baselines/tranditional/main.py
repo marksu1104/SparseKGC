@@ -1,6 +1,8 @@
 import argparse
 import csv
 import os
+import random
+import sys
 import time
 import torch
 import torch.nn as nn
@@ -210,31 +212,19 @@ class Trainer:
         return results
 
 if __name__ == "__main__":
-    METRICS_CSV_HEADER = [
-        "Dataset", "Model",
-        "MRR_Tail", "MRR_Head", "MRR_Avg",
-        "Hits@1_Tail", "Hits@1_Head", "Hits@1_Avg",
-        "Hits@3_Tail", "Hits@3_Head", "Hits@3_Avg",
-        "Hits@10_Tail", "Hits@10_Head", "Hits@10_Avg",
-        "seconds",
-    ]
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+    from metrics_csv import upsert_metrics_csv, METRICS_CSV_HEADER
 
     def append_metrics_csv(output_path, dataset, model, metrics, seconds):
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        write_header = not os.path.exists(output_path)
-        with open(output_path, "a", newline="") as f:
-            writer = csv.writer(f)
-            if write_header:
-                writer.writerow(METRICS_CSV_HEADER)
-            writer.writerow([
-                dataset,
-                model,
-                f"{metrics['mrr_tail']:.5f}", f"{metrics['mrr_head']:.5f}", f"{metrics['mrr_avg']:.5f}",
-                f"{metrics['h1_tail']:.5f}", f"{metrics['h1_head']:.5f}", f"{metrics['h1_avg']:.5f}",
-                f"{metrics['h3_tail']:.5f}", f"{metrics['h3_head']:.5f}", f"{metrics['h3_avg']:.5f}",
-                f"{metrics['h10_tail']:.5f}", f"{metrics['h10_head']:.5f}", f"{metrics['h10_avg']:.5f}",
-                f"{seconds:.3f}",
-            ])
+        upsert_metrics_csv(output_path, [
+            dataset,
+            model,
+            f"{metrics['mrr_tail']:.5f}", f"{metrics['mrr_head']:.5f}", f"{metrics['mrr_avg']:.5f}",
+            f"{metrics['h1_tail']:.5f}", f"{metrics['h1_head']:.5f}", f"{metrics['h1_avg']:.5f}",
+            f"{metrics['h3_tail']:.5f}", f"{metrics['h3_head']:.5f}", f"{metrics['h3_avg']:.5f}",
+            f"{metrics['h10_tail']:.5f}", f"{metrics['h10_head']:.5f}", f"{metrics['h10_avg']:.5f}",
+            f"{seconds:.3f}",
+        ])
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default="../../datasets/FB15K-237")
     parser.add_argument("--dataset", type=str, default="FB15K-237")
@@ -252,8 +242,14 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--eval_freq", type=int, default=1)
     parser.add_argument("--patience", type=int, default=25)
-    
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+
     args = parser.parse_args()
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
 
     run_start = time.perf_counter()
     trainer = Trainer(args)

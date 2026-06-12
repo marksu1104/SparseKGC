@@ -4,9 +4,13 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+from log_format import print_start, print_result
 
 DATASETS = [
     "WD-singer",
@@ -40,6 +44,11 @@ TUNED_CONFIGS = {
     ("FB15K-237-10", "transe"): "-rel_reason -batch 128 -init_dim 100 -gcn_dim 100 -embed_dim 100 -gcn_layer 2 -gcn_drop 0.1 -score_func transe -chan_drop 0.1 -rel_norm -hid_drop 0.2 -sim_decay 1e-6",
     ("FB15K-237-20", "distmult"): "-rel_reason -batch 256 -init_dim 100 -gcn_dim 100 -embed_dim 100 -gcn_layer 2 -gcn_drop 0.2 -score_func distmult -chamix_dim 400 -relmix_dim 400 -rel_norm -hid_drop 0.3",
     ("FB15K-237-50", "distmult"): "-rel_reason -batch 256 -init_dim 100 -gcn_dim 100 -embed_dim 100 -gcn_layer 1 -gcn_drop 0.0 -score_func distmult -chamix_dim 200 -relmix_dim 200 -rel_norm -hid_drop 0.3",
+    # No published tuned config for conve on FB15K-237-20/50; reuse the
+    # FB15K-237-10 conve config (closest sparsity regime with a tuned entry)
+    # rather than falling back to GENERIC_CONFIGS["conve"].
+    ("FB15K-237-20", "conve"): "-rel_reason -batch 128 -init_dim 100 -gcn_dim 100 -embed_dim 100 -gcn_layer 2 -gcn_drop 0.1 -score_func conve -chan_drop 0.2 -rel_mask 0.2 -rel_norm -hid_drop 0.3 -sim_decay 1e-5 -k_w 10 -k_h 10",
+    ("FB15K-237-50", "conve"): "-rel_reason -batch 128 -init_dim 100 -gcn_dim 100 -embed_dim 100 -gcn_layer 2 -gcn_drop 0.1 -score_func conve -chan_drop 0.2 -rel_mask 0.2 -rel_norm -hid_drop 0.3 -sim_decay 1e-5 -k_w 10 -k_h 10",
     ("FB15K-237", "distmult"): "-rel_reason -batch 256 -init_dim 100 -gcn_dim 100 -embed_dim 100 -gcn_layer 1 -gcn_drop 0.0 -score_func distmult -chamix_dim 200 -relmix_dim 200 -rel_norm -hid_drop 0.3",
 }
 
@@ -104,42 +113,42 @@ def run_one(dataset, score_func, gpu, dry_run=False):
         return {"status": "skipped", "seconds": 0.0}
 
     args = shlex.split(get_config(dataset, score_func))
-    cmd = [
-        sys.executable,
-        "-u",
-        "run.py",
-        "-data",
-        dataset,
-        "-data_root",
-        str(data_root),
-        *args,
-    ]
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
     log_dir = baseline_output_dir()
     Path("checkpoints").mkdir(exist_ok=True)
     log_file = log_dir / f"HoGRN_{score_func}_{normalize_dataset_name(dataset)}.log"
 
-    command_str = " ".join(shlex.quote(x) for x in cmd)
-    print("=" * 72, flush=True)
-    print(f"Time   | {timestamp()}", flush=True)
-    print(f"Start  | baseline=HoGRN | model={score_func} | dataset={normalize_dataset_name(dataset)}", flush=True)
-    print(f"Params | {command_str}", flush=True)
-    print(f"Log    | {log_file}", flush=True)
-    print("=" * 72, flush=True)
-    if dry_run:
-        return {"status": "dry_run", "seconds": 0.0, "log_file": str(log_file), "command": command_str}
+    params_str = get_config(dataset, score_func)
+    print_start(timestamp(), "HoGRN", score_func, normalize_dataset_name(dataset), params_str)
 
     status = "ok"
     start = time.perf_counter()
-    with log_file.open("w", buffering=1) as f:
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
-        for line in process.stdout:
-            f.write(line)
-            f.flush()
-        process.wait()
-        if process.returncode != 0:
-            status = "failed"
+    with tempfile.TemporaryDirectory(prefix="hogrn_log_") as tmp_logdir:
+        cmd = [
+            sys.executable,
+            "-u",
+            "run.py",
+            "-data",
+            dataset,
+            "-data_root",
+            str(data_root),
+            "-logdir",
+            tmp_logdir,
+            *args,
+        ]
+        command_str = " ".join(shlex.quote(x) for x in cmd)
+        if dry_run:
+            return {"status": "dry_run", "seconds": 0.0, "log_file": str(log_file), "command": command_str}
+
+        with log_file.open("w", buffering=1) as f:
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+            for line in process.stdout:
+                f.write(line)
+                f.flush()
+            process.wait()
+            if process.returncode != 0:
+                status = "failed"
     seconds = time.perf_counter() - start
     row = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -162,14 +171,7 @@ def run_one(dataset, score_func, gpu, dry_run=False):
                     valid_line = line
                 if "FINAL_EVAL_METRICS" in line:
                     final_line = line
-        print("-" * 72, flush=True)
-        print(f"Time   | {timestamp()}", flush=True)
-        print(f"Result | baseline=HoGRN | model={score_func} | dataset={normalize_dataset_name(dataset)}", flush=True)
-        print(f"  valid  : {valid_line or 'not_found'}")
-        print(f"  test: {final_line or 'not_found'}")
-        print(f"  seconds: {seconds:.3f}", flush=True)
-        print(f"  log    : {log_file}", flush=True)
-        print("-" * 72, flush=True)
+        print_result(timestamp(), "HoGRN", score_func, normalize_dataset_name(dataset), log_file, valid_line, final_line, seconds, status)
     if status != "ok":
         raise subprocess.CalledProcessError(process.returncode, cmd)
     return row

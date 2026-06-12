@@ -2,19 +2,13 @@ from helper import *
 from data_loader import *
 from model.models import *
 
-import os, time, argparse, csv, pickle
+import os, sys, time, argparse, csv, pickle
 from pathlib import Path
 import numpy as np
 import torch
 
-METRICS_CSV_HEADER = [
-    "Dataset", "Model",
-    "MRR_Tail", "MRR_Head", "MRR_Avg",
-    "Hits@1_Tail", "Hits@1_Head", "Hits@1_Avg",
-    "Hits@3_Tail", "Hits@3_Head", "Hits@3_Avg",
-    "Hits@10_Tail", "Hits@10_Head", "Hits@10_Avg",
-    "seconds",
-]
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+from metrics_csv import upsert_metrics_csv, METRICS_CSV_HEADER
 
 class Runner(object):
 
@@ -285,20 +279,15 @@ class Runner(object):
         timing_dir = Path(output_root) if output_root else Path("timings") / "hogrn"
         timing_dir.mkdir(parents=True, exist_ok=True)
         path = timing_dir / "hogrn_metrics.csv"
-        write_header = not path.exists()
-        with path.open("a", newline="") as f:
-            writer = csv.writer(f)
-            if write_header:
-                writer.writerow(METRICS_CSV_HEADER)
-            writer.writerow([
-                self.p.dataset,
-                self.p.score_func,
-                f"{results['left_mrr']:.5f}", f"{results['right_mrr']:.5f}", f"{results['mrr']:.5f}",
-                f"{results['left_hits@1']:.5f}", f"{results['right_hits@1']:.5f}", f"{results['hits@1']:.5f}",
-                f"{results['left_hits@3']:.5f}", f"{results['right_hits@3']:.5f}", f"{results['hits@3']:.5f}",
-                f"{results['left_hits@10']:.5f}", f"{results['right_hits@10']:.5f}", f"{results['hits@10']:.5f}",
-                f"{seconds:.3f}",
-            ])
+        upsert_metrics_csv(str(path), [
+            self.p.dataset,
+            self.p.score_func,
+            f"{results['left_mrr']:.5f}", f"{results['right_mrr']:.5f}", f"{results['mrr']:.5f}",
+            f"{results['left_hits@1']:.5f}", f"{results['right_hits@1']:.5f}", f"{results['hits@1']:.5f}",
+            f"{results['left_hits@3']:.5f}", f"{results['right_hits@3']:.5f}", f"{results['hits@3']:.5f}",
+            f"{results['left_hits@10']:.5f}", f"{results['right_hits@10']:.5f}", f"{results['hits@10']:.5f}",
+            f"{seconds:.3f}",
+        ])
         self.logger.info('RUNTIME_STD baseline=HoGRN model={} dataset={} seconds={:.3f}'.format(
             self.p.score_func, self.p.dataset, seconds))
 
